@@ -1,24 +1,24 @@
 # Echoes
 
-Echoes is a low-profile Windows terminal spaced-repetition app built with Python, Textual, SQLite, and FSRS.
+Echoes 是一个运行在 Windows 终端里的低存在感背单词应用，使用 Python、Textual、SQLite 和 FSRS 构建。
 
-The app stores data locally in one SQLite file and uses a plain terminal interface. Press `Esc` to switch between the review screen and a fake build-log screen.
+应用数据默认只保存在本机的单个 SQLite 文件中。界面保持黑底白字或默认终端配色，按 `Esc` 可以在背词界面和伪装构建日志界面之间快速切换。
 
-## Requirements
+## 环境要求
 
 - Windows
 - PowerShell
-- Python 3.12 or newer
+- Python 3.12 或更新版本
 - uv
 
-Check Python and uv:
+检查 Python 和 uv：
 
 ```powershell
 python --version
 uv --version
 ```
 
-## Quick Start
+## 快速开始
 
 ```powershell
 cd D:\Echoes
@@ -28,9 +28,9 @@ uv run echoes import .\items.csv
 uv run echoes
 ```
 
-## Create A CSV File
+## 创建词库 CSV
 
-Create `items.csv` in the project directory:
+在项目目录下创建 `items.csv`：
 
 ```powershell
 @'
@@ -41,101 +41,103 @@ subtle,delicate or not obvious,sʌtl,There is a subtle difference.,work
 '@ | Set-Content -Encoding UTF8 .\items.csv
 ```
 
-Supported CSV headers:
+支持的 CSV 表头：
 
 ```csv
 term,definition,phonetic,example,note,tags,source
 ```
 
-Field notes:
+字段说明：
 
-- `term`: required.
-- `definition`: optional meaning or answer text.
-- `phonetic`: optional pronunciation.
-- `example`: optional example sentence.
-- `note`: optional extra note.
-- `tags`: optional tags. Use `;` or `,` to separate multiple tags.
-- `source`: optional import source.
+- `term`：单词或短语，必填。
+- `definition`：释义或答案文本，可选。
+- `phonetic`：音标，可选。
+- `example`：例句，可选。
+- `note`：额外备注，可选。
+- `tags`：标签，可选，多个标签可以用 `;` 或 `,` 分隔。
+- `source`：来源，可选。
 
-## Import Items
+## 导入词库
 
 ```powershell
 uv run echoes import .\items.csv
 ```
 
-Example output:
+示例输出：
 
 ```text
 ok rows=3 items=3 cards=3 skipped=0
 ```
 
-Import is deduplicated by item and card type. Running the same import again will not create duplicate cards.
+导入会自动去重。重复导入同一个文件时，不会重复创建同一批卡片。
 
-## Start The App
+## 启动应用
 
 ```powershell
 uv run echoes
 ```
 
-Default keys:
+默认按键：
 
-- `Space`: reveal answer.
-- `1`: Again.
-- `2`: Hard.
-- `3`: Good.
-- `4`: Easy.
-- `Esc`: switch cover log on/off.
-- `q`: quit.
+- `Space`：显示答案。
+- `1`：Again，忘记。
+- `2`：Hard，困难想起。
+- `3`：Good，正常想起。
+- `4`：Easy，轻松想起。
+- `Esc`：开启或关闭伪装日志界面。
+- `q`：退出。
 
-The default interface is intentionally quiet. You will see the current item first, then press `Space` to reveal the answer, then press `1` to `4` to rate it.
+默认界面会尽量保持安静。你会先看到当前单词，按 `Space` 显示答案，再按 `1` 到 `4` 进行评分。
 
-## Boss Key
+## 老板键
 
-`Esc` toggles the cover screen.
+默认老板键是 `Esc`。
 
-When the cover screen is active, the app shows a scrolling fake build log. Press `Esc` again to restore the exact review state. This does not create review records or reset the current card.
+按下后，应用会切换到滚动的伪装构建日志界面。再次按下 `Esc` 会恢复到原来的背词状态，包括当前卡片和答案显示状态。
 
-Change the boss key:
+切换老板键不会写入复习记录，也不会重置当前卡片。
+
+修改老板键：
 
 ```powershell
 uv run echoes config set boss_key f12
 ```
 
-Restore the default:
+恢复默认老板键：
 
 ```powershell
 uv run echoes config set boss_key escape
 ```
 
-Restart the app after changing key settings.
+修改按键配置后，需要重新启动应用。
 
-## Help Hints
+## 显示提示
 
-By default, visible hints are minimal.
+默认情况下，界面提示会尽量少。
 
-Turn hints on:
+开启提示：
 
 ```powershell
 uv run echoes config set show_help true
 ```
 
-Turn hints off:
+关闭提示：
 
 ```powershell
 uv run echoes config set show_help false
 ```
 
-Restart the app after changing this setting.
+修改后需要重新启动应用。
 
-## Cover Log Profiles
+## 伪装日志风格
 
-Available fake log profiles:
+当前支持这些伪装日志风格：
 
 - `docker`
 - `git`
 - `pytest`
 
-Set profile:
+设置方式：
 
 ```powershell
 uv run echoes config set fake_log_profile docker
@@ -143,86 +145,86 @@ uv run echoes config set fake_log_profile git
 uv run echoes config set fake_log_profile pytest
 ```
 
-Restart the app after changing this setting.
+修改后需要重新启动应用。
 
-## Stats
+## 查看统计
 
 ```powershell
 uv run echoes stats
 ```
 
-Example output:
+示例输出：
 
 ```text
 items=3 cards=3 due=3 reviews=0
 ```
 
-Meaning:
+含义：
 
-- `items`: imported item count.
-- `cards`: review card count.
-- `due`: currently due cards.
-- `reviews`: saved review records.
+- `items`：已导入词条数量。
+- `cards`：复习卡片数量。
+- `due`：当前到期可复习卡片数量。
+- `reviews`：已保存复习记录数量。
 
-## Database
+## 数据库
 
-The default database path on Windows is:
+Windows 下默认数据库路径：
 
 ```powershell
 %LOCALAPPDATA%\Echoes\echoes.db
 ```
 
-For the current user, it usually looks like:
+通常类似：
 
 ```powershell
 C:\Users\<username>\AppData\Local\Echoes\echoes.db
 ```
 
-All local data is stored in this one SQLite file:
+所有本地数据都保存在这一个 SQLite 文件中：
 
-- items
-- cards
-- FSRS state
-- review history
-- settings
+- 词条
+- 卡片
+- FSRS 复习状态
+- 复习历史
+- 应用设置
 
-If this file is deleted, the stored data in that database is deleted too.
+如果删除这个 `.db` 文件，对应数据库里的数据也会被删除。
 
-Use another database file:
+使用指定数据库文件：
 
 ```powershell
 uv run echoes --db .\data\test.db import .\items.csv
 uv run echoes --db .\data\test.db
 ```
 
-You can also set:
+也可以通过环境变量指定数据库路径：
 
 ```powershell
 $env:ECHOES_DB_PATH = "D:\Echoes\data\custom.db"
 uv run echoes
 ```
 
-## Config
+## 配置
 
-Set a config value:
+设置配置项：
 
 ```powershell
 uv run echoes config set boss_key escape
 ```
 
-Read one config value:
+读取单个配置项：
 
 ```powershell
 uv run echoes config get boss_key
 ```
 
-Read all config values:
+读取所有配置项：
 
 ```powershell
 uv run echoes config get
 ```
 
-Current useful config keys:
+当前常用配置项：
 
 - `boss_key`
 - `show_help`
@@ -230,15 +232,15 @@ Current useful config keys:
 - `review_limit`
 - `daily_new_limit`
 
-## Doctor
+## 环境检查
 
-Check the environment and database path:
+检查运行环境和数据库路径：
 
 ```powershell
 uv run echoes doctor
 ```
 
-Example output:
+示例输出：
 
 ```text
 ok db=C:\Users\<username>\AppData\Local\Echoes\echoes.db
@@ -247,27 +249,27 @@ textual=8.2.5
 fsrs=unknown
 ```
 
-## Development Checks
+## 开发检查
 
-Run tests:
+运行测试：
 
 ```powershell
 uv run pytest
 ```
 
-Run lint:
+运行 lint：
 
 ```powershell
 uv run ruff check .
 ```
 
-Check formatting:
+检查格式：
 
 ```powershell
 uv run ruff format . --check
 ```
 
-Format files:
+格式化文件：
 
 ```powershell
 uv run ruff format .
