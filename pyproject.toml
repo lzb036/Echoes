@@ -1,0 +1,41 @@
+[project]
+name = "echoes"
+version = "0.1.0"
+description = "A low-profile terminal spaced-repetition app for Windows."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fsrs>=6.3.1",
+    "textual>=6.5.0",
+]
+
+[project.scripts]
+echoes = "echoes.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.0",
+    "ruff>=0.14.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/echoes"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
