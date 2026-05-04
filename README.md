@@ -57,6 +57,70 @@ term,definition,phonetic,example,note,tags,source
 - `tags`：标签，可选，多个标签可以用 `;` 或 `,` 分隔。
 - `source`：来源，可选。
 
+## 从 PDF 生成 CSV
+
+如果每天的词表来自 `奶酪单词-中英词表.pdf`，可以让 Codex 读取 PDF 的可见内容，并生成符合本应用导入格式的 CSV。
+
+推荐把 PDF 文件放在项目目录下，然后对 Codex 使用下面这段提示词。
+
+```text
+请读取当前项目目录下的「奶酪单词-中英词表.pdf」，根据 PDF 页面中实际显示的内容，生成一个可被本项目导入的 CSV 文件。
+
+目标输出文件：
+
+- items.csv
+
+CSV 格式要求：
+
+- 必须使用 UTF-8 编码。
+- 必须包含表头：term,definition,phonetic,example,note,tags,source
+- 每一行对应一个单词或短语。
+- term 填英文单词或英文短语。
+- definition 填中文释义。如果 PDF 中同一个词有多个中文释义，请用中文分号「；」合并。
+- phonetic 填音标。如果 PDF 没有音标，留空。
+- example 填例句。如果 PDF 没有例句，留空。
+- note 填补充信息，例如词性、固定搭配、易混说明等；如果没有，留空。
+- tags 填固定值：cheese
+- source 填固定值：奶酪单词-中英词表.pdf
+
+抽取规则：
+
+- 只使用 PDF 中能看到的内容，不要凭空补充释义、例句或音标。
+- 保持 PDF 中的单词顺序。
+- 跳过页眉、页脚、页码、水印、广告、目录和无关说明文字。
+- 如果一行里包含序号，只提取真正的单词和释义，不要把序号写入 term。
+- 如果 PDF 中出现重复单词，只保留第一次出现的记录。
+- 如果某个词条无法可靠判断英文 term 或中文 definition，请不要猜测，把它写入一个单独的 skipped_items.md，并说明跳过原因。
+- CSV 字段中如果包含逗号、换行或英文双引号，必须按 CSV 标准正确转义。
+
+完成后请输出：
+
+- 生成的 CSV 文件路径。
+- 成功生成的词条数量。
+- 跳过的词条数量。
+- 如有跳过项，列出 skipped_items.md 的路径。
+
+不要修改项目代码，不要导入数据库，只生成 CSV 文件。
+```
+
+生成后导入：
+
+```powershell
+uv run echoes import .\items.csv
+```
+
+如果想保留每天的原始 CSV，可以让 Codex 把输出文件改成日期命名，例如：
+
+```text
+目标输出文件改为：imports/cheese-2026-05-04.csv
+```
+
+然后这样导入：
+
+```powershell
+uv run echoes import .\imports\cheese-2026-05-04.csv
+```
+
 ## 导入词库
 
 ```powershell
