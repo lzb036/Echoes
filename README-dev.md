@@ -46,6 +46,14 @@ uv run echoes --db .\data\test.db import .\items.csv
 uv run echoes --db .\data\test.db
 ```
 
+Review progress is intentionally simple:
+
+- each imported item starts at `0/3`;
+- `Good` and `Easy` add one pass;
+- `Hard` keeps the current pass count;
+- `Again` resets the item to `0/3`;
+- an item leaves the queue at `3/3`.
+
 ## Commands
 
 ```powershell

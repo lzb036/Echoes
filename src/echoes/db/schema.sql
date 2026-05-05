@@ -21,11 +21,6 @@ CREATE TABLE IF NOT EXISTS cards (
     id INTEGER PRIMARY KEY,
     word_id INTEGER NOT NULL,
     card_type TEXT NOT NULL,
-    fsrs_state TEXT NOT NULL,
-    due_at TEXT NOT NULL,
-    last_reviewed_at TEXT,
-    review_count INTEGER NOT NULL DEFAULT 0,
-    lapse_count INTEGER NOT NULL DEFAULT 0,
     pass_count INTEGER NOT NULL DEFAULT 0,
     completed_at TEXT,
     created_at TEXT NOT NULL,
@@ -36,8 +31,8 @@ CREATE TABLE IF NOT EXISTS cards (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_word_type
 ON cards(word_id, card_type);
 
-CREATE INDEX IF NOT EXISTS idx_cards_due
-ON cards(due_at);
+CREATE INDEX IF NOT EXISTS idx_cards_completion
+ON cards(completed_at, id);
 
 CREATE TABLE IF NOT EXISTS reviews (
     id INTEGER PRIMARY KEY,
@@ -45,9 +40,8 @@ CREATE TABLE IF NOT EXISTS reviews (
     rating INTEGER NOT NULL,
     reviewed_at TEXT NOT NULL,
     elapsed_ms INTEGER,
-    scheduled_days REAL,
-    state_before TEXT NOT NULL,
-    state_after TEXT NOT NULL,
+    pass_count_before INTEGER NOT NULL,
+    pass_count_after INTEGER NOT NULL,
     is_manual INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE
 );

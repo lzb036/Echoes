@@ -34,19 +34,14 @@ class CardRecord:
     id: int | None
     word_id: int
     card_type: str
-    fsrs_state: str
-    due_at: datetime
-    last_reviewed_at: datetime | None
-    review_count: int
-    lapse_count: int
+    pass_count: int
+    completed_at: datetime | None
     created_at: datetime
     updated_at: datetime
-    pass_count: int = 0
-    completed_at: datetime | None = None
 
 
 @dataclass(frozen=True)
-class DueCard:
+class StudyCard:
     card: CardRecord
     word: Word
 
@@ -68,7 +63,6 @@ class ReviewRecord:
     rating: int
     reviewed_at: datetime
     elapsed_ms: int | None
-    scheduled_days: float | None
-    state_before: str
-    state_after: str
+    pass_count_before: int
+    pass_count_after: int
     is_manual: bool = False

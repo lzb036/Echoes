@@ -4,7 +4,6 @@ import argparse
 import sys
 from pathlib import Path
 
-import fsrs
 import textual
 
 from echoes.app import EchoesApp
@@ -13,7 +12,6 @@ from echoes.db.connection import connect
 from echoes.db.migrations import migrate
 from echoes.db.repositories import EchoesStore
 from echoes.importers.csv_importer import import_csv
-from echoes.srs.service import SrsService
 
 DEFAULT_IMPORT_BATCH_SIZE = 60
 
@@ -32,7 +30,6 @@ def main(argv: list[str] | None = None) -> None:
                 result = import_csv(
                     args.path,
                     store=store,
-                    srs=SrsService(),
                     card_type=args.card_type,
                     batch_size=DEFAULT_IMPORT_BATCH_SIZE,
                 )
@@ -53,7 +50,8 @@ def main(argv: list[str] | None = None) -> None:
             print(
                 "items="
                 f"{store.count_words()} cards={store.count_cards()} "
-                f"due={store.count_due_cards()} reviews={store.count_reviews()}"
+                f"done={store.review_stats().completed_cards} "
+                f"left={store.count_remaining_cards()} reviews={store.count_reviews()}"
             )
             return
 
@@ -66,7 +64,7 @@ def main(argv: list[str] | None = None) -> None:
             return
 
         config = build_config(db_path=db_path, settings=store.get_settings())
-        EchoesApp(store=store, srs=SrsService(), config=config).run()
+        EchoesApp(store=store, config=config).run()
     finally:
         conn.close()
 
@@ -94,11 +92,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _doctor(db_path: Path) -> None:
-    fsrs_version = getattr(fsrs, "__version__", "unknown")
     print(f"ok db={db_path}")
     print(f"python={sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
     print(f"textual={textual.__version__}")
-    print(f"fsrs={fsrs_version}")
 
 
 def _config_command(store: EchoesStore, args: argparse.Namespace) -> None:

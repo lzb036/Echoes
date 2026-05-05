@@ -5,7 +5,6 @@ from echoes.db.migrations import migrate
 from echoes.db.repositories import EchoesStore
 from echoes.importers.csv_importer import import_csv
 from echoes.models import ReviewRating
-from echoes.srs.service import SrsService
 
 NOW = datetime(2026, 1, 1, 9, 0, tzinfo=UTC)
 
@@ -34,16 +33,14 @@ def test_csv_import_rebuilds_the_database_batch(tmp_path) -> None:
         encoding="utf-8",
     )
     store = make_store(tmp_path)
-    srs = SrsService(clock=lambda: NOW)
 
-    import_csv(first_csv, store=store, srs=srs, batch_size=2)
-    card = store.next_due_card(now=NOW)
+    import_csv(first_csv, store=store, batch_size=2)
+    card = store.next_study_card()
     assert card is not None
-    outcome = srs.review(card.card, ReviewRating.GOOD, reviewed_at=NOW, elapsed_ms=500)
-    store.apply_review(int(card.card.id), outcome)
+    store.apply_review(int(card.card.id), ReviewRating.GOOD, reviewed_at=NOW, elapsed_ms=500)
     assert store.count_reviews() == 1
 
-    result = import_csv(second_csv, store=store, srs=srs, batch_size=2)
+    result = import_csv(second_csv, store=store, batch_size=2)
 
     assert result.words_created == 2
     assert result.cards_created == 2
@@ -69,11 +66,10 @@ def test_csv_import_requires_expected_batch_size_before_deleting_old_data(tmp_pa
         encoding="utf-8",
     )
     store = make_store(tmp_path)
-    srs = SrsService()
-    import_csv(first_csv, store=store, srs=srs, batch_size=2)
+    import_csv(first_csv, store=store, batch_size=2)
 
     try:
-        import_csv(short_csv, store=store, srs=srs, batch_size=2)
+        import_csv(short_csv, store=store, batch_size=2)
     except ValueError as exc:
         assert "expected 2 valid items, found 1" in str(exc)
     else:
@@ -96,7 +92,7 @@ def test_csv_import_skips_blank_and_duplicate_terms(tmp_path) -> None:
     )
     store = make_store(tmp_path)
 
-    result = import_csv(csv_path, store=store, srs=SrsService(), batch_size=2)
+    result = import_csv(csv_path, store=store, batch_size=2)
 
     assert result.rows_seen == 4
     assert result.skipped == 2

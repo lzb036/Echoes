@@ -7,8 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from echoes.config import DEFAULT_SETTINGS
-from echoes.models import PASS_TARGET, CardRecord, DueCard, ReviewRating, ReviewStats, Word
-from echoes.srs.service import ReviewOutcome as SrsReviewOutcome
+from echoes.models import PASS_TARGET, CardRecord, ReviewRating, ReviewStats, StudyCard, Word
 from echoes.time_utils import from_iso, to_iso, utc_now
 
 
@@ -88,7 +87,6 @@ class EchoesStore:
         now: datetime | None = None,
     ) -> Word:
         timestamp = now or utc_now()
-        tags_json = json.dumps(tags or [], ensure_ascii=False)
         with self.conn:
             cursor = self.conn.execute(
                 """
@@ -103,7 +101,7 @@ class EchoesStore:
                     phonetic.strip(),
                     example.strip(),
                     note.strip(),
-                    tags_json,
+                    json.dumps(tags or [], ensure_ascii=False),
                     source.strip(),
                     to_iso(timestamp),
                     to_iso(timestamp),
@@ -146,11 +144,8 @@ class EchoesStore:
         *,
         words: Sequence[WordImportRow],
         card_type: str,
-        card_states: Sequence[tuple[str, datetime]],
         now: datetime | None = None,
     ) -> RebuildBatchOutcome:
-        if len(words) != len(card_states):
-            raise ValueError("word and card state counts differ")
         if not words:
             raise ValueError("no valid items to import")
 
@@ -161,24 +156,16 @@ class EchoesStore:
             cards_deleted = self.conn.execute("DELETE FROM cards").rowcount
             words_deleted = self.conn.execute("DELETE FROM words").rowcount
 
-            for word, (fsrs_state, due_at) in zip(words, card_states, strict=True):
+            for word in words:
                 word_id = self._insert_word(word, timestamp=timestamp)
                 self.conn.execute(
                     """
                     INSERT INTO cards(
-                        word_id, card_type, fsrs_state, due_at,
-                        pass_count, completed_at, created_at, updated_at
+                        word_id, card_type, pass_count, completed_at, created_at, updated_at
                     )
-                    VALUES (?, ?, ?, ?, 0, NULL, ?, ?)
+                    VALUES (?, ?, 0, NULL, ?, ?)
                     """,
-                    (
-                        word_id,
-                        card_type,
-                        fsrs_state,
-                        to_iso(due_at),
-                        timestamp_iso,
-                        timestamp_iso,
-                    ),
+                    (word_id, card_type, timestamp_iso, timestamp_iso),
                 )
 
         return RebuildBatchOutcome(
@@ -190,7 +177,6 @@ class EchoesStore:
         )
 
     def _insert_word(self, word: WordImportRow, *, timestamp: datetime) -> int:
-        tags_json = json.dumps(word.tags or [], ensure_ascii=False)
         cursor = self.conn.execute(
             """
             INSERT INTO words(
@@ -204,7 +190,7 @@ class EchoesStore:
                 word.phonetic.strip(),
                 word.example.strip(),
                 word.note.strip(),
-                tags_json,
+                json.dumps(word.tags or [], ensure_ascii=False),
                 word.source.strip(),
                 to_iso(timestamp),
                 to_iso(timestamp),
@@ -228,8 +214,6 @@ class EchoesStore:
         *,
         word_id: int,
         card_type: str,
-        fsrs_state: str,
-        due_at: datetime,
         now: datetime | None = None,
     ) -> CardRecord:
         timestamp = now or utc_now()
@@ -237,19 +221,11 @@ class EchoesStore:
             cursor = self.conn.execute(
                 """
                 INSERT INTO cards(
-                    word_id, card_type, fsrs_state, due_at,
-                    pass_count, completed_at, created_at, updated_at
+                    word_id, card_type, pass_count, completed_at, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, 0, NULL, ?, ?)
+                VALUES (?, ?, 0, NULL, ?, ?)
                 """,
-                (
-                    word_id,
-                    card_type,
-                    fsrs_state,
-                    to_iso(due_at),
-                    to_iso(timestamp),
-                    to_iso(timestamp),
-                ),
+                (word_id, card_type, to_iso(timestamp), to_iso(timestamp)),
             )
         created = self.get_card(int(cursor.lastrowid))
         if created is None:
@@ -261,39 +237,23 @@ class EchoesStore:
         *,
         word_id: int,
         card_type: str,
-        fsrs_state: str,
-        due_at: datetime,
     ) -> tuple[CardRecord, bool]:
         existing = self.find_card(word_id, card_type)
         if existing:
             return existing, False
-        return (
-            self.create_card(
-                word_id=word_id,
-                card_type=card_type,
-                fsrs_state=fsrs_state,
-                due_at=due_at,
-            ),
-            True,
-        )
+        return self.create_card(word_id=word_id, card_type=card_type), True
 
     def get_card(self, card_id: int) -> CardRecord | None:
         row = self.conn.execute("SELECT * FROM cards WHERE id = ?", (card_id,)).fetchone()
         return _card_from_row(row) if row else None
 
-    def next_due_card(self, *, now: datetime | None = None) -> DueCard | None:
-        timestamp = to_iso(now or utc_now())
+    def next_study_card(self) -> StudyCard | None:
         row = self.conn.execute(
             """
             SELECT
                 c.id AS c_id,
                 c.word_id AS c_word_id,
                 c.card_type AS c_card_type,
-                c.fsrs_state AS c_fsrs_state,
-                c.due_at AS c_due_at,
-                c.last_reviewed_at AS c_last_reviewed_at,
-                c.review_count AS c_review_count,
-                c.lapse_count AS c_lapse_count,
                 c.pass_count AS c_pass_count,
                 c.completed_at AS c_completed_at,
                 c.created_at AS c_created_at,
@@ -312,95 +272,61 @@ class EchoesStore:
             FROM cards c
             JOIN words w ON w.id = c.word_id
             WHERE c.completed_at IS NULL AND w.archived_at IS NULL
-            ORDER BY
-                CASE WHEN c.due_at <= ? THEN 0 ELSE 1 END,
-                c.due_at ASC,
-                c.id ASC
+            ORDER BY c.pass_count ASC, c.id ASC
             LIMIT 1
-            """,
-            (timestamp,),
+            """
         ).fetchone()
         if row is None:
             return None
-        return DueCard(card=_card_from_prefixed_row(row), word=_word_from_prefixed_row(row))
+        return StudyCard(card=_card_from_prefixed_row(row), word=_word_from_prefixed_row(row))
 
     def apply_review(
         self,
         card_id: int,
-        outcome: SrsReviewOutcome,
+        rating: ReviewRating,
         *,
+        reviewed_at: datetime | None = None,
+        elapsed_ms: int | None = None,
         is_manual: bool = False,
     ) -> None:
+        review_time = reviewed_at or utc_now()
         with self.conn:
-            pass_count, completed_at = self._next_pass_state(card_id, outcome.rating)
+            row = self.conn.execute(
+                "SELECT pass_count, completed_at FROM cards WHERE id = ?",
+                (card_id,),
+            ).fetchone()
+            if row is None:
+                raise ValueError(f"card not found: {card_id}")
+
+            before = int(row["pass_count"])
+            after = _next_pass_count(before, rating)
+            completed_at = to_iso(review_time) if after >= PASS_TARGET else None
             self.conn.execute(
                 """
                 UPDATE cards
-                SET
-                    fsrs_state = ?,
-                    due_at = ?,
-                    last_reviewed_at = ?,
-                    review_count = review_count + 1,
-                    lapse_count = lapse_count + ?,
-                    pass_count = ?,
-                    completed_at = ?,
-                    updated_at = ?
+                SET pass_count = ?, completed_at = ?, updated_at = ?
                 WHERE id = ?
                 """,
-                (
-                    outcome.state_after,
-                    to_iso(outcome.due_at),
-                    to_iso(outcome.reviewed_at),
-                    outcome.lapse_delta,
-                    pass_count,
-                    to_iso(completed_at) if completed_at else None,
-                    to_iso(utc_now()),
-                    card_id,
-                ),
+                (after, completed_at, to_iso(utc_now()), card_id),
             )
             self.conn.execute(
                 """
                 INSERT INTO reviews(
-                    card_id, rating, reviewed_at, elapsed_ms, scheduled_days,
-                    state_before, state_after, is_manual
+                    card_id, rating, reviewed_at, elapsed_ms,
+                    pass_count_before, pass_count_after, is_manual
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     card_id,
-                    int(outcome.rating),
-                    to_iso(outcome.reviewed_at),
-                    outcome.elapsed_ms,
-                    outcome.scheduled_days,
-                    outcome.state_before,
-                    outcome.state_after,
+                    int(rating),
+                    to_iso(review_time),
+                    elapsed_ms,
+                    before,
+                    after,
                     1 if is_manual else 0,
                 ),
             )
-
-    def _next_pass_state(
-        self,
-        card_id: int,
-        rating: ReviewRating,
-    ) -> tuple[int, datetime | None]:
-        row = self.conn.execute(
-            "SELECT pass_count, completed_at FROM cards WHERE id = ?",
-            (card_id,),
-        ).fetchone()
-        if row is None:
-            raise RuntimeError("card not found")
-        if row["completed_at"]:
-            return int(row["pass_count"]), from_iso(row["completed_at"])
-
-        current = int(row["pass_count"])
-        if rating == ReviewRating.AGAIN:
-            next_count = 0
-        elif rating in {ReviewRating.GOOD, ReviewRating.EASY}:
-            next_count = min(PASS_TARGET, current + 1)
-        else:
-            next_count = current
-        completed_at = utc_now() if next_count >= PASS_TARGET else None
-        return next_count, completed_at
 
     def count_words(self) -> int:
         return int(
@@ -421,23 +347,22 @@ class EchoesStore:
             ).fetchone()["count"]
         )
 
-    def count_due_cards(self, *, now: datetime | None = None) -> int:
+    def count_remaining_cards(self) -> int:
         return int(
             self.conn.execute(
                 """
                 SELECT COUNT(*) AS count
                 FROM cards c
                 JOIN words w ON w.id = c.word_id
-                WHERE c.due_at <= ? AND w.archived_at IS NULL
-                """,
-                (to_iso(now or utc_now()),),
+                WHERE c.completed_at IS NULL AND w.archived_at IS NULL
+                """
             ).fetchone()["count"]
         )
 
     def count_reviews(self) -> int:
         return int(self.conn.execute("SELECT COUNT(*) AS count FROM reviews").fetchone()["count"])
 
-    def review_stats(self, *, now: datetime | None = None) -> ReviewStats:
+    def review_stats(self) -> ReviewStats:
         row = self.conn.execute(
             """
             SELECT
@@ -446,12 +371,20 @@ class EchoesStore:
             FROM cards c
             JOIN words w ON w.id = c.word_id
             WHERE w.archived_at IS NULL
-            """,
+            """
         ).fetchone()
         return ReviewStats(
             total_cards=int(row["total_cards"] or 0),
             completed_cards=int(row["completed_cards"] or 0),
         )
+
+
+def _next_pass_count(current: int, rating: ReviewRating) -> int:
+    if rating == ReviewRating.AGAIN:
+        return 0
+    if rating in (ReviewRating.GOOD, ReviewRating.EASY):
+        return min(PASS_TARGET, current + 1)
+    return min(PASS_TARGET, current)
 
 
 def _word_from_row(row: sqlite3.Row) -> Word:
@@ -475,15 +408,10 @@ def _card_from_row(row: sqlite3.Row) -> CardRecord:
         id=int(row["id"]),
         word_id=int(row["word_id"]),
         card_type=row["card_type"],
-        fsrs_state=row["fsrs_state"],
-        due_at=from_iso(row["due_at"]),
-        last_reviewed_at=from_iso(row["last_reviewed_at"]) if row["last_reviewed_at"] else None,
-        review_count=int(row["review_count"]),
-        lapse_count=int(row["lapse_count"]),
-        created_at=from_iso(row["created_at"]),
-        updated_at=from_iso(row["updated_at"]),
         pass_count=int(row["pass_count"]),
         completed_at=from_iso(row["completed_at"]) if row["completed_at"] else None,
+        created_at=from_iso(row["created_at"]),
+        updated_at=from_iso(row["updated_at"]),
     )
 
 
@@ -508,13 +436,8 @@ def _card_from_prefixed_row(row: sqlite3.Row) -> CardRecord:
         id=int(row["c_id"]),
         word_id=int(row["c_word_id"]),
         card_type=row["c_card_type"],
-        fsrs_state=row["c_fsrs_state"],
-        due_at=from_iso(row["c_due_at"]),
-        last_reviewed_at=from_iso(row["c_last_reviewed_at"]) if row["c_last_reviewed_at"] else None,
-        review_count=int(row["c_review_count"]),
-        lapse_count=int(row["c_lapse_count"]),
-        created_at=from_iso(row["c_created_at"]),
-        updated_at=from_iso(row["c_updated_at"]),
         pass_count=int(row["c_pass_count"]),
         completed_at=from_iso(row["c_completed_at"]) if row["c_completed_at"] else None,
+        created_at=from_iso(row["c_created_at"]),
+        updated_at=from_iso(row["c_updated_at"]),
     )

@@ -6,7 +6,6 @@ from echoes.config import build_config
 from echoes.db.connection import connect
 from echoes.db.migrations import migrate
 from echoes.db.repositories import EchoesStore
-from echoes.srs.service import SrsService
 
 NOW = datetime(2026, 1, 1, 9, 0, tzinfo=UTC)
 
@@ -16,18 +15,14 @@ def make_app(tmp_path) -> tuple[EchoesApp, EchoesStore]:
     migrate(conn)
     store = EchoesStore(conn)
     store.seed_default_settings()
-    srs = SrsService(clock=lambda: NOW)
     word = store.create_word(term="opaque", definition="hard to understand", now=NOW)
-    state, due_at = srs.create_new_card_state(now=NOW)
     store.create_card(
         word_id=int(word.id),
         card_type="recognition",
-        fsrs_state=state,
-        due_at=due_at,
         now=NOW,
     )
     config = build_config(db_path=tmp_path / "app.db", settings=store.get_settings())
-    return EchoesApp(store=store, srs=srs, config=config), store
+    return EchoesApp(store=store, config=config), store
 
 
 def test_boss_key_preserves_current_card_and_writes_no_review(tmp_path) -> None:
@@ -85,7 +80,7 @@ def test_study_screen_shows_batch_and_card_status(tmp_path) -> None:
     asyncio.run(scenario())
 
 
-def test_good_rating_advances_word_pass_progress(tmp_path) -> None:
+def test_good_rating_advances_word_progress_until_three_passes(tmp_path) -> None:
     app, _store = make_app(tmp_path)
 
     async def scenario() -> None:
@@ -94,7 +89,16 @@ def test_good_rating_advances_word_pass_progress(tmp_path) -> None:
             await pilot.press("3")
             status = app.query_one("#status")
             rendered = str(status.render())
+            assert "opaque" in str(app.query_one("#term").render())
             assert "Batch [--------------------] 0/1" in rendered
             assert "Word [#--] 1/3" in rendered
+
+            await pilot.press("space")
+            await pilot.press("3")
+            await pilot.press("space")
+            await pilot.press("3")
+            rendered = str(status.render())
+            assert "No items." in str(app.query_one("#term").render())
+            assert "Batch [####################] 1/1" in rendered
 
     asyncio.run(scenario())

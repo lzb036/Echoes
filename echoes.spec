@@ -2,7 +2,7 @@
 
 from PyInstaller.utils.hooks import collect_submodules
 
-hiddenimports = collect_submodules("textual") + collect_submodules("fsrs")
+hiddenimports = collect_submodules("textual")
 
 a = Analysis(
     ["src/echoes/__main__.py"],

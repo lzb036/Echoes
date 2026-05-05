@@ -2,12 +2,12 @@
 
 ## 项目定位
 
-这是一个基于 Python 的 Windows 终端背单词应用，核心目标是“低存在感、快速切换、稳定记忆”。应用默认运行在终端中，界面保持极简，避免花哨组件、明显学习软件视觉特征和大面积中文提示。
+这是一个基于 Python 的 Windows 终端背单词应用，核心目标是“低存在感、快速切换、当天完成”。应用默认运行在终端中，界面保持极简，避免花哨组件、明显学习软件视觉特征和大面积中文提示。
 
 优先级如下：
 
 1. 隐蔽性和即时切换。
-2. 复习算法正确性。
+2. 当天 60 个词的完成规则清晰可靠。
 3. 本地数据安全和可迁移。
 4. 操作效率。
 5. 后续可扩展性。
@@ -20,31 +20,24 @@
 
 - Python 3.12 或更新版本。
 - Textual：用于构建终端 TUI。
-- fsrs：即 py-fsrs 在 PyPI 中的包名，用于 FSRS 间隔重复算法。
 - SQLite：单文件本地数据库。
 - sqlite3 标准库：初期优先使用，避免过早引入 ORM。
-- pytest：测试核心调度、数据库和导入导出逻辑。
+- pytest：测试核心规则、数据库和导入逻辑。
 - ruff：代码格式和静态检查。
 - uv：推荐作为 Windows 下的依赖和虚拟环境管理工具。
 - PyInstaller：用于生成 Windows 便携版发布包。
 
 保留 Python + Textual 的理由：
 
-- Textual 是 Python TUI 框架，适合构建终端应用，能处理按键绑定、Screen 切换、定时器、滚动区域和组件状态。
+- Textual 适合构建终端应用，能处理按键绑定、状态切换、定时器、滚动区域和组件状态。
 - Windows 下 `curses` 体验和可用性不够理想，不作为首选。
 - `prompt_toolkit` 适合命令行交互，但复杂界面、状态切换和日志滚动不如 Textual 清晰。
-- Rich 适合渲染文本，但应用状态、布局和键盘事件需要额外封装，因此只作为 Textual 的底层能力间接受益。
 - SQLite 单文件满足隐私、本地化、备份和便携需求，当前不需要服务端数据库。
 
-可替代方案：
-
-- 如果 Textual 后续在 Windows 终端中出现严重输入或刷新问题，可以评估 `prompt_toolkit` 重写 UI 层，但调度、数据库和业务层必须保持独立。
-- 如果 py-fsrs API 发生破坏性变化，需要在 `srs_service` 中做适配，不允许让第三方库对象泄漏到 UI 层和数据库层。
-- 暂不使用 Web 前端、Electron、PySide、Tkinter。它们更显眼，不符合终端低存在感目标。
+当前不使用 FSRS 或其他间隔重复库。产品目标是每天导入一批新词并当天背完，不保留旧批次，也不做跨天复习调度。
 
 参考资料：
 
-- py-fsrs: https://github.com/open-spaced-repetition/py-fsrs
 - Textual: https://textual.textualize.io/
 
 ## 产品原则
@@ -97,9 +90,9 @@ Boss Key 是第一核心功能。默认按键建议为 `escape`，但必须可�
 
 建议实现：
 
-- 使用 Textual 的 mode/screen 或显式状态机维护 `study` 和 `cover` 两种模式。
+- 使用显式状态维护 `study` 和 `cover` 两种模式。
 - `App` 级别绑定 Boss Key，确保在任何子组件焦点下都能响应。
-- 进入 `cover` 时暂停学习界面的自动刷新，但不暂停伪装日志刷新。
+- 进入 `cover` 时不重置学习界面。
 - 使用一个独立 `FakeLogService` 生成日志行。
 - 伪装日志区只保留有限行数，例如 300 到 1000 行，避免内存无界增长。
 
@@ -107,13 +100,13 @@ Boss Key 是第一核心功能。默认按键建议为 `escape`，但必须可�
 
 基础学习流程：
 
-1. 从数据库取出当前到期卡片。
+1. 从数据库取出一个未完成卡片。
 2. 展示单词或提示。
 3. 用户按键显示答案。
 4. 用户使用 Again / Hard / Good / Easy 评分。
-5. 调用 FSRS 调度并更新卡片状态。
+5. 按 3 次过关规则更新卡片状态。
 6. 写入 review log。
-7. 进入下一张到期卡片。
+7. 进入下一张未完成卡片。
 
 默认按键建议：
 
@@ -130,34 +123,24 @@ Boss Key 是第一核心功能。默认按键建议为 `escape`，但必须可�
 
 - 未显示答案前，不允许评分。
 - 评分后立即持久化，不把关键复习数据只放在内存里。
-- 没有到期卡片时显示短文本，例如 `No due items.`，不要展示庆祝动画。
-- 支持手动提前复习，但必须和“到期复习”区分记录。
+- 没有未完成卡片时显示短文本，例如 `No items.`，不要展示庆祝动画。
+- 底部必须显示当前可用按键，避免用户忘记操作。
 
-## FSRS 集成规则
+## 3 次过关规则
 
-使用 `fsrs` 包作为 FSRS 算法来源。业务代码中不要自行实现 FSRS 公式。
+每个词只有一个核心状态：`pass_count`。
 
-集成原则：
+- 新导入词条从 `0/3` 开始。
+- Again：忘记，`pass_count` 重置为 0。
+- Hard：困难想起，`pass_count` 不变。
+- Good：想起，`pass_count + 1`，最多到 3。
+- Easy：轻松想起，`pass_count + 1`，最多到 3。
+- 当 `pass_count` 到 3 时写入 `completed_at`，该词不再出现在学习队列。
 
-- FSRS 相关逻辑集中放在 `srs_service` 或同等模块。
-- UI 层只传入用户评分，不直接操作 FSRS 对象细节。
-- 数据库层保存足够恢复 FSRS 卡片状态的信息。
-- 每次评分必须保存 review log，方便未来优化参数、审计和导出。
-- 所有时间统一使用 UTC 存储，展示时再转本地时间。
-- 数据库中保存 FSRS 参数版本，便于未来迁移。
+整体进度：
 
-评分语义：
-
-- Again：忘记。
-- Hard：困难想起。
-- Good：犹豫后想起。
-- Easy：轻松想起。
-
-注意事项：
-
-- py-fsrs 当前示例中使用 `Scheduler`, `Card`, `Rating`, `ReviewLog`。
-- 新卡默认应立即到期，但项目层仍应显式记录 `created_at` 和 `due_at`。
-- 不要把第三方库对象直接 pickle 进数据库；优先保存结构化字段或 JSON。
+- `Batch 1/60` 表示本批 60 个词里已经完成 1 个。
+- `Word 1/3` 表示当前词已经过关 1 次。
 
 ## 数据库设计
 
@@ -165,8 +148,7 @@ Boss Key 是第一核心功能。默认按键建议为 `escape`，但必须可�
 
 - 开发环境：项目目录下 `data/echoes.db`。
 - 用户环境：`%LOCALAPPDATA%\Echoes\echoes.db`。
-
-初始表建议：
+- 便携版：包内 `data\echoes.db`。
 
 ### words
 
@@ -186,31 +168,27 @@ Boss Key 是第一核心功能。默认按键建议为 `escape`，但必须可�
 
 ### cards
 
-保存复习卡片状态。一个 word 可对应多张 card，例如英译中、中译英、拼写。
+保存当前批次的卡片状态。
 
 - `id` INTEGER PRIMARY KEY。
 - `word_id` INTEGER NOT NULL。
 - `card_type` TEXT NOT NULL。
-- `fsrs_state` TEXT NOT NULL，JSON。
-- `due_at` TEXT NOT NULL。
-- `last_reviewed_at` TEXT。
-- `review_count` INTEGER NOT NULL DEFAULT 0。
-- `lapse_count` INTEGER NOT NULL DEFAULT 0。
+- `pass_count` INTEGER NOT NULL DEFAULT 0。
+- `completed_at` TEXT。
 - `created_at` TEXT NOT NULL。
 - `updated_at` TEXT NOT NULL。
 
 ### reviews
 
-保存每次复习。
+保存每次评分。
 
 - `id` INTEGER PRIMARY KEY。
 - `card_id` INTEGER NOT NULL。
 - `rating` INTEGER NOT NULL。
 - `reviewed_at` TEXT NOT NULL。
 - `elapsed_ms` INTEGER。
-- `scheduled_days` REAL。
-- `state_before` TEXT NOT NULL，JSON。
-- `state_after` TEXT NOT NULL，JSON。
+- `pass_count_before` INTEGER NOT NULL。
+- `pass_count_after` INTEGER NOT NULL。
 - `is_manual` INTEGER NOT NULL DEFAULT 0。
 
 ### settings
@@ -240,11 +218,13 @@ Boss Key 是第一核心功能。默认按键建议为 `escape`，但必须可�
 echoes/
   pyproject.toml
   README.md
+  README-dev.md
   AGENTS.md
   src/
     echoes/
       __init__.py
       app.py
+      cli.py
       config.py
       models.py
       time_utils.py
@@ -254,22 +234,17 @@ echoes/
         migrations.py
         repositories.py
         schema.sql
-      srs/
-        __init__.py
-        service.py
-        serializers.py
       ui/
         __init__.py
-        screens.py
-        widgets.py
         keymap.py
         fake_logs.py
       importers/
         __init__.py
         csv_importer.py
   tests/
-    test_srs_service.py
     test_repositories.py
+    test_csv_importer.py
+    test_app_boss_key.py
     test_fake_logs.py
     test_keymap.py
 ```
@@ -277,8 +252,7 @@ echoes/
 分层规则：
 
 - `ui` 只负责渲染、输入和状态切换。
-- `srs` 只负责调度、评分和 FSRS 数据转换。
-- `db` 只负责连接、迁移和持久化。
+- `db` 负责连接、迁移、持久化和 3 次过关状态更新。
 - `importers` 只负责数据导入清洗。
 - `config` 负责路径、快捷键和用户设置。
 
@@ -324,7 +298,7 @@ Windows 注意事项：
 建议命令：
 
 - `echoes`: 启动应用。
-- `echoes import words.csv`: 导入词库。
+- `echoes import items.csv`: 导入当天词库。
 - `echoes stats`: 输出极简统计。
 - `echoes doctor`: 检查数据库、依赖和终端环境。
 - `echoes config set boss_key escape`: 修改配置。
@@ -370,26 +344,27 @@ Windows 注意事项：
 - 可插入词条和卡片。
 - 复习日志事务测试通过。
 
-### 阶段 2：FSRS 服务
+### 阶段 2：3 次过关规则
 
 目标：
 
-- 集成 `fsrs`。
-- 实现新卡创建、评分、due 查询。
-- 实现 FSRS 状态序列化和反序列化。
+- 实现 `pass_count` 状态。
+- 实现 Again/Hard/Good/Easy 评分更新。
+- 实现完成队列和批次进度统计。
 
 验收：
 
-- Again/Hard/Good/Easy 都能产生不同调度结果。
-- 评分后 due 时间、review_count、review log 正确。
-- 所有时间以 UTC 保存。
+- Good/Easy 会推进 1 次。
+- Hard 不改变过关次数。
+- Again 清零。
+- 3/3 后该词不再出现。
 
 ### 阶段 3：最小学习 UI
 
 目标：
 
 - 实现单词展示、答案展示、评分按键。
-- 实现到期队列。
+- 显示批次进度和当前词进度。
 - 实现无卡片状态。
 
 验收：
@@ -445,10 +420,10 @@ Windows 注意事项：
 
 必须测试：
 
-- FSRS 评分映射。
-- 卡片状态序列化。
+- Again/Hard/Good/Easy 的过关次数变化。
+- 3/3 后退出学习队列。
 - SQLite 事务一致性。
-- due 查询排序。
+- 未完成卡片查询排序：优先复习过关次数更低的词。
 - CSV 导入覆盖行为。
 - Boss Key 状态切换。
 - FakeLogService 行数上限。
@@ -464,7 +439,7 @@ Windows 注意事项：
 
 - 单元测试不得依赖真实用户目录。
 - 数据库测试使用临时目录。
-- 时间相关测试使用固定时钟或可注入 clock。
+- 时间相关测试使用固定时间或可注入时间。
 - UI 测试优先测试状态机，不强行做复杂截图测试。
 
 ## 代码风格
@@ -496,7 +471,6 @@ Windows 注意事项：
 - 仅英文释义模式。
 - 每日上限和工作时段轻量提醒。
 - Anki/CSV 导入。
-- 参数优化器，基于 review log 调整 FSRS 参数。
 - 伪装日志 profile 可自定义。
 - 快速隐藏当前行的极简模式，而不是整屏切换。
 - 可选浮动小窗不推荐，容易变显眼。
@@ -505,6 +479,7 @@ Windows 注意事项：
 
 当前不做：
 
+- FSRS 或跨天间隔重复调度。
 - 云同步。
 - 账号系统。
 - Web 管理后台。
@@ -525,6 +500,6 @@ Windows 注意事项：
 - 若实现代码，保持 Windows 优先。
 - 不要把 UI 做得像学习软件。
 - Boss Key 相关改动必须优先保证状态恢复和不误写复习记录。
-- 涉及 py-fsrs/Textual API 时，先确认当前官方文档或已安装版本。
+- 不要重新引入 FSRS，除非用户明确改变产品方向。
 - 每次修改数据库 schema，都要同步迁移和测试。
 - 最终总结要说重点，语句简明，不要长篇大论。

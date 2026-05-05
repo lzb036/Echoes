@@ -9,8 +9,7 @@ from textual.widgets import RichLog, Static
 
 from echoes.config import AppConfig
 from echoes.db.repositories import EchoesStore
-from echoes.models import PASS_TARGET, DueCard, ReviewRating, ReviewStats
-from echoes.srs.service import SrsService
+from echoes.models import PASS_TARGET, ReviewRating, ReviewStats, StudyCard
 from echoes.time_utils import utc_now
 from echoes.ui.fake_logs import FakeLogService
 from echoes.ui.keymap import normalize_key
@@ -70,13 +69,12 @@ class EchoesApp(App[None]):
         Binding("q", "quit", show=False),
     ]
 
-    def __init__(self, *, store: EchoesStore, srs: SrsService, config: AppConfig) -> None:
+    def __init__(self, *, store: EchoesStore, config: AppConfig) -> None:
         super().__init__()
         self.store = store
-        self.srs = srs
         self.config = config
         self.fake_logs = FakeLogService(profile=config.fake_log_profile)
-        self.current: DueCard | None = None
+        self.current: StudyCard | None = None
         self.stats = ReviewStats(total_cards=0, completed_cards=0)
         self.answer_revealed = False
         self.started_at: datetime | None = None
@@ -134,17 +132,23 @@ class EchoesApp(App[None]):
     def _rate(self, rating: ReviewRating) -> None:
         if self.cover_active or self.current is None or not self.answer_revealed:
             return
-        started = self.started_at or utc_now()
-        elapsed_ms = int((utc_now() - started).total_seconds() * 1000)
-        outcome = self.srs.review(self.current.card, rating, elapsed_ms=elapsed_ms)
-        self.store.apply_review(int(self.current.card.id), outcome)
+        now = utc_now()
+        started = self.started_at or now
+        elapsed_ms = int((now - started).total_seconds() * 1000)
+        self.store.apply_review(
+            int(self.current.card.id),
+            rating,
+            reviewed_at=now,
+            elapsed_ms=elapsed_ms,
+        )
         self._load_next_card()
 
     def _load_next_card(self) -> None:
-        self.current = self.store.next_due_card()
+        now = utc_now()
+        self.current = self.store.next_study_card()
         self.stats = self.store.review_stats()
         self.answer_revealed = False
-        self.started_at = utc_now()
+        self.started_at = now
         self._render_study()
 
     def _render_study(self) -> None:
@@ -154,7 +158,7 @@ class EchoesApp(App[None]):
         keys = self.query_one("#keys", Static)
 
         if self.current is None:
-            term.update("No due items.")
+            term.update("No items.")
             status.update(_batch_status(self.stats))
             answer.update("")
             keys.update(EMPTY_HELP)
@@ -188,9 +192,12 @@ def _phonetic(value: str) -> str:
     return f"/{stripped.strip('/')}/"
 
 
-def _status_text(current: DueCard, stats: ReviewStats) -> str:
-    word_bar = _progress_bar(current.card.pass_count, PASS_TARGET, width=3)
-    return f"{_batch_status(stats)}\nWord {word_bar} {current.card.pass_count}/{PASS_TARGET}"
+def _status_text(current: StudyCard, stats: ReviewStats) -> str:
+    pass_count = min(PASS_TARGET, max(0, current.card.pass_count))
+    return (
+        f"{_batch_status(stats)}\n"
+        f"Word {_progress_bar(pass_count, PASS_TARGET, width=3)} {pass_count}/{PASS_TARGET}"
+    )
 
 
 def _batch_status(stats: ReviewStats) -> str:

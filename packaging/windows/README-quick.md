@@ -6,6 +6,8 @@
 
 `items.csv` must contain exactly 60 valid items. A successful import deletes the old items, cards, and review records, then keeps only the new 60 items.
 
+Each item needs 3 passes. `Good` and `Easy` add one pass, `Hard` keeps the current pass count, and `Again` resets it to 0. At `3/3`, the item stops appearing.
+
 Useful files:
 
 - `start.cmd`: start the app.

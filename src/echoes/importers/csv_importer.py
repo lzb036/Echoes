@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from echoes.db.repositories import EchoesStore, WordImportRow
-from echoes.srs.service import SrsService
 
 DEFAULT_BATCH_SIZE = 60
 
@@ -26,7 +25,6 @@ def import_csv(
     path: Path,
     *,
     store: EchoesStore,
-    srs: SrsService,
     card_type: str = "recognition",
     batch_size: int | None = DEFAULT_BATCH_SIZE,
 ) -> ImportResult:
@@ -34,11 +32,9 @@ def import_csv(
     if batch_size is not None and len(rows) != batch_size:
         raise ValueError(f"expected {batch_size} valid items, found {len(rows)}")
 
-    card_states = [srs.create_new_card_state() for _row in rows]
     outcome = store.rebuild_word_batch(
         words=rows,
         card_type=card_type,
-        card_states=card_states,
     )
     return ImportResult(
         rows_seen=rows_seen,
