@@ -61,6 +61,13 @@ Review progress is intentionally simple:
 - `Again` resets the item to `0/3`;
 - an item leaves the queue at `3/3`.
 
+The study queue uses delayed re-entry instead of strict 60-item rounds:
+
+- `Again`: returns after 2 reviewed cards;
+- `Hard`: returns after 4 reviewed cards;
+- `Good`: returns after 10 reviewed cards;
+- `Easy`: returns after 16 reviewed cards.
+
 ## Commands
 
 ```powershell

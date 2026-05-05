@@ -7,8 +7,21 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from echoes.config import DEFAULT_SETTINGS
-from echoes.models import PASS_TARGET, CardRecord, ReviewRating, ReviewStats, StudyCard, Word
+from echoes.models import (
+    AGAIN_DELAY,
+    EASY_DELAY,
+    GOOD_DELAY,
+    HARD_DELAY,
+    PASS_TARGET,
+    CardRecord,
+    ReviewRating,
+    ReviewStats,
+    StudyCard,
+    Word,
+)
 from echoes.time_utils import from_iso, to_iso, utc_now
+
+REVIEW_TURN_SETTING = "review_turn"
 
 
 @dataclass(frozen=True)
@@ -155,15 +168,17 @@ class EchoesStore:
             reviews_deleted = self.conn.execute("DELETE FROM reviews").rowcount
             cards_deleted = self.conn.execute("DELETE FROM cards").rowcount
             words_deleted = self.conn.execute("DELETE FROM words").rowcount
+            self._set_review_turn(0, timestamp=timestamp)
 
             for word in words:
                 word_id = self._insert_word(word, timestamp=timestamp)
                 self.conn.execute(
                     """
                     INSERT INTO cards(
-                        word_id, card_type, pass_count, completed_at, created_at, updated_at
+                        word_id, card_type, pass_count, next_review_turn,
+                        completed_at, created_at, updated_at
                     )
-                    VALUES (?, ?, 0, NULL, ?, ?)
+                    VALUES (?, ?, 0, 0, NULL, ?, ?)
                     """,
                     (word_id, card_type, timestamp_iso, timestamp_iso),
                 )
@@ -221,9 +236,10 @@ class EchoesStore:
             cursor = self.conn.execute(
                 """
                 INSERT INTO cards(
-                    word_id, card_type, pass_count, completed_at, created_at, updated_at
+                    word_id, card_type, pass_count, next_review_turn,
+                    completed_at, created_at, updated_at
                 )
-                VALUES (?, ?, 0, NULL, ?, ?)
+                VALUES (?, ?, 0, 0, NULL, ?, ?)
                 """,
                 (word_id, card_type, to_iso(timestamp), to_iso(timestamp)),
             )
@@ -248,6 +264,7 @@ class EchoesStore:
         return _card_from_row(row) if row else None
 
     def next_study_card(self) -> StudyCard | None:
+        review_turn = self.review_turn()
         row = self.conn.execute(
             """
             SELECT
@@ -255,6 +272,7 @@ class EchoesStore:
                 c.word_id AS c_word_id,
                 c.card_type AS c_card_type,
                 c.pass_count AS c_pass_count,
+                c.next_review_turn AS c_next_review_turn,
                 c.completed_at AS c_completed_at,
                 c.created_at AS c_created_at,
                 c.updated_at AS c_updated_at,
@@ -272,9 +290,15 @@ class EchoesStore:
             FROM cards c
             JOIN words w ON w.id = c.word_id
             WHERE c.completed_at IS NULL AND w.archived_at IS NULL
-            ORDER BY c.pass_count ASC, c.id ASC
+            ORDER BY
+                CASE WHEN c.next_review_turn <= ? THEN 0 ELSE 1 END ASC,
+                CASE WHEN c.next_review_turn <= ? THEN c.pass_count ELSE c.next_review_turn END ASC,
+                c.next_review_turn ASC,
+                c.pass_count ASC,
+                c.id ASC
             LIMIT 1
-            """
+            """,
+            (review_turn, review_turn),
         ).fetchone()
         if row is None:
             return None
@@ -298,24 +322,31 @@ class EchoesStore:
             if row is None:
                 raise ValueError(f"card not found: {card_id}")
 
+            review_turn = self.review_turn() + 1
             before = int(row["pass_count"])
             after = _next_pass_count(before, rating)
             completed_at = to_iso(review_time) if after >= PASS_TARGET else None
+            next_review_turn = review_turn
+            review_log_next_turn: int | None = None
+            if completed_at is None:
+                next_review_turn = review_turn + _review_delay(rating)
+                review_log_next_turn = next_review_turn
             self.conn.execute(
                 """
                 UPDATE cards
-                SET pass_count = ?, completed_at = ?, updated_at = ?
+                SET pass_count = ?, next_review_turn = ?, completed_at = ?, updated_at = ?
                 WHERE id = ?
                 """,
-                (after, completed_at, to_iso(utc_now()), card_id),
+                (after, next_review_turn, completed_at, to_iso(utc_now()), card_id),
             )
             self.conn.execute(
                 """
                 INSERT INTO reviews(
                     card_id, rating, reviewed_at, elapsed_ms,
-                    pass_count_before, pass_count_after, is_manual
+                    pass_count_before, pass_count_after,
+                    review_turn, next_review_turn, is_manual
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     card_id,
@@ -324,9 +355,12 @@ class EchoesStore:
                     elapsed_ms,
                     before,
                     after,
+                    review_turn,
+                    review_log_next_turn,
                     1 if is_manual else 0,
                 ),
             )
+            self._set_review_turn(review_turn, timestamp=review_time)
 
     def count_words(self) -> int:
         return int(
@@ -378,6 +412,30 @@ class EchoesStore:
             completed_cards=int(row["completed_cards"] or 0),
         )
 
+    def review_turn(self) -> int:
+        row = self.conn.execute(
+            "SELECT value FROM settings WHERE key = ?",
+            (REVIEW_TURN_SETTING,),
+        ).fetchone()
+        if row is None:
+            return 0
+        try:
+            return max(0, int(row["value"]))
+        except ValueError:
+            return 0
+
+    def _set_review_turn(self, value: int, *, timestamp: datetime) -> None:
+        self.conn.execute(
+            """
+            INSERT INTO settings(key, value, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(key) DO UPDATE SET
+                value = excluded.value,
+                updated_at = excluded.updated_at
+            """,
+            (REVIEW_TURN_SETTING, str(value), to_iso(timestamp)),
+        )
+
 
 def _next_pass_count(current: int, rating: ReviewRating) -> int:
     if rating == ReviewRating.AGAIN:
@@ -385,6 +443,16 @@ def _next_pass_count(current: int, rating: ReviewRating) -> int:
     if rating in (ReviewRating.GOOD, ReviewRating.EASY):
         return min(PASS_TARGET, current + 1)
     return min(PASS_TARGET, current)
+
+
+def _review_delay(rating: ReviewRating) -> int:
+    if rating == ReviewRating.AGAIN:
+        return AGAIN_DELAY
+    if rating == ReviewRating.HARD:
+        return HARD_DELAY
+    if rating == ReviewRating.EASY:
+        return EASY_DELAY
+    return GOOD_DELAY
 
 
 def _word_from_row(row: sqlite3.Row) -> Word:
@@ -409,6 +477,7 @@ def _card_from_row(row: sqlite3.Row) -> CardRecord:
         word_id=int(row["word_id"]),
         card_type=row["card_type"],
         pass_count=int(row["pass_count"]),
+        next_review_turn=int(row["next_review_turn"]),
         completed_at=from_iso(row["completed_at"]) if row["completed_at"] else None,
         created_at=from_iso(row["created_at"]),
         updated_at=from_iso(row["updated_at"]),
@@ -437,6 +506,7 @@ def _card_from_prefixed_row(row: sqlite3.Row) -> CardRecord:
         word_id=int(row["c_word_id"]),
         card_type=row["c_card_type"],
         pass_count=int(row["c_pass_count"]),
+        next_review_turn=int(row["c_next_review_turn"]),
         completed_at=from_iso(row["c_completed_at"]) if row["c_completed_at"] else None,
         created_at=from_iso(row["c_created_at"]),
         updated_at=from_iso(row["c_updated_at"]),

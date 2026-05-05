@@ -128,7 +128,7 @@ Boss Key 是第一核心功能。默认按键建议为 `escape`，但必须可�
 
 ## 3 次过关规则
 
-每个词只有一个核心状态：`pass_count`。
+每个词的核心状态是 `pass_count` 和 `next_review_turn`。
 
 - 新导入词条从 `0/3` 开始。
 - Again：忘记，`pass_count` 重置为 0。
@@ -136,6 +136,17 @@ Boss Key 是第一核心功能。默认按键建议为 `escape`，但必须可�
 - Good：想起，`pass_count + 1`，最多到 3。
 - Easy：轻松想起，`pass_count + 1`，最多到 3。
 - 当 `pass_count` 到 3 时写入 `completed_at`，该词不再出现在学习队列。
+
+队列规则：
+
+- 每评分一次，全局 `review_turn` 加 1。
+- Again：隔 2 张卡再出现。
+- Hard：隔 4 张卡再出现。
+- Good：隔 10 张卡再出现。
+- Easy：隔 16 张卡再出现。
+- 取下一张时优先选已经到 `next_review_turn` 的卡。
+- 如果没有到期卡，则选 `next_review_turn` 最小的卡继续，不让界面空等。
+- 这不是严格 60 个一整轮，而是错词更快回来、熟词更晚回来。
 
 整体进度：
 
@@ -174,6 +185,7 @@ Boss Key 是第一核心功能。默认按键建议为 `escape`，但必须可�
 - `word_id` INTEGER NOT NULL。
 - `card_type` TEXT NOT NULL。
 - `pass_count` INTEGER NOT NULL DEFAULT 0。
+- `next_review_turn` INTEGER NOT NULL DEFAULT 0。
 - `completed_at` TEXT。
 - `created_at` TEXT NOT NULL。
 - `updated_at` TEXT NOT NULL。
@@ -189,6 +201,8 @@ Boss Key 是第一核心功能。默认按键建议为 `escape`，但必须可�
 - `elapsed_ms` INTEGER。
 - `pass_count_before` INTEGER NOT NULL。
 - `pass_count_after` INTEGER NOT NULL。
+- `review_turn` INTEGER NOT NULL。
+- `next_review_turn` INTEGER。
 - `is_manual` INTEGER NOT NULL DEFAULT 0。
 
 ### settings
@@ -350,6 +364,7 @@ Windows 注意事项：
 目标：
 
 - 实现 `pass_count` 状态。
+- 实现 `next_review_turn` 延迟插队队列。
 - 实现 Again/Hard/Good/Easy 评分更新。
 - 实现完成队列和批次进度统计。
 
@@ -358,6 +373,7 @@ Windows 注意事项：
 - Good/Easy 会推进 1 次。
 - Hard 不改变过关次数。
 - Again 清零。
+- Again/Hard/Good/Easy 会写入不同的下一次出现间隔。
 - 3/3 后该词不再出现。
 
 ### 阶段 3：最小学习 UI
@@ -422,9 +438,10 @@ Windows 注意事项：
 必须测试：
 
 - Again/Hard/Good/Easy 的过关次数变化。
+- Again/Hard/Good/Easy 的下一次出现间隔。
 - 3/3 后退出学习队列。
 - SQLite 事务一致性。
-- 未完成卡片查询排序：优先复习过关次数更低的词。
+- 未完成卡片查询排序：优先到期卡，再按进度和下一次出现位置排序。
 - CSV 导入覆盖行为。
 - Boss Key 状态切换。
 - FakeLogService 行数上限。

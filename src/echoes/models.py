@@ -5,6 +5,10 @@ from datetime import datetime
 from enum import IntEnum
 
 PASS_TARGET = 3
+AGAIN_DELAY = 2
+HARD_DELAY = 4
+GOOD_DELAY = 10
+EASY_DELAY = 16
 
 
 class ReviewRating(IntEnum):
@@ -35,6 +39,7 @@ class CardRecord:
     word_id: int
     card_type: str
     pass_count: int
+    next_review_turn: int
     completed_at: datetime | None
     created_at: datetime
     updated_at: datetime
@@ -65,4 +70,6 @@ class ReviewRecord:
     elapsed_ms: int | None
     pass_count_before: int
     pass_count_after: int
+    review_turn: int
+    next_review_turn: int | None
     is_manual: bool = False
