@@ -57,3 +57,16 @@ def test_rating_before_reveal_is_ignored(tmp_path) -> None:
 
     asyncio.run(scenario())
     assert store.count_reviews() == 0
+
+
+def test_footer_shows_key_hints_before_and_after_reveal(tmp_path) -> None:
+    app, _store = make_app(tmp_path)
+
+    async def scenario() -> None:
+        async with app.run_test() as pilot:
+            meta = app.query_one("#meta")
+            assert str(meta.render()) == "Space Answer  Esc Cover  q Quit"
+            await pilot.press("space")
+            assert str(meta.render()) == "1 Again  2 Hard  3 Good  4 Easy  Esc Cover  q Quit"
+
+    asyncio.run(scenario())

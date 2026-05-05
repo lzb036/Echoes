@@ -15,6 +15,10 @@ from echoes.time_utils import utc_now
 from echoes.ui.fake_logs import FakeLogService
 from echoes.ui.keymap import normalize_key
 
+EMPTY_HELP = "Esc Cover  q Quit"
+PROMPT_HELP = "Space Answer  Esc Cover  q Quit"
+RATING_HELP = "1 Again  2 Hard  3 Good  4 Easy  Esc Cover  q Quit"
+
 
 class EchoesApp(App[None]):
     TITLE = "build"
@@ -42,6 +46,7 @@ class EchoesApp(App[None]):
     #meta {
         height: auto;
         color: white;
+        dock: bottom;
     }
 
     #cover {
@@ -142,21 +147,21 @@ class EchoesApp(App[None]):
         if self.current is None:
             term.update("No due items.")
             answer.update("")
-            meta.update("Esc" if self.config.show_help else "")
+            meta.update(EMPTY_HELP)
             return
 
         word = self.current.word
         term.update(word.term)
         if not self.answer_revealed:
             answer.update("")
-            meta.update("Space" if self.config.show_help else "")
+            meta.update(PROMPT_HELP)
             return
 
         details = [
             part for part in [word.definition, _phonetic(word.phonetic), word.example] if part
         ]
         answer.update("\n".join(details) if details else "(empty)")
-        meta.update("1 Again  2 Hard  3 Good  4 Easy" if self.config.show_help else "1  2  3  4")
+        meta.update(RATING_HELP)
 
     def _tick_cover(self) -> None:
         if not self.cover_active:
