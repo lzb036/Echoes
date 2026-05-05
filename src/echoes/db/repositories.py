@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from echoes.config import DEFAULT_SETTINGS
-from echoes.models import CardRecord, DueCard, Word
+from echoes.models import CardRecord, DueCard, ReviewStats, Word
 from echoes.srs.service import ReviewOutcome as SrsReviewOutcome
 from echoes.time_utils import from_iso, to_iso, utc_now
 
@@ -400,6 +400,26 @@ class EchoesStore:
 
     def count_reviews(self) -> int:
         return int(self.conn.execute("SELECT COUNT(*) AS count FROM reviews").fetchone()["count"])
+
+    def review_stats(self, *, now: datetime | None = None) -> ReviewStats:
+        timestamp = to_iso(now or utc_now())
+        row = self.conn.execute(
+            """
+            SELECT
+                COUNT(*) AS total_cards,
+                SUM(CASE WHEN c.review_count > 0 THEN 1 ELSE 0 END) AS reviewed_cards,
+                SUM(CASE WHEN c.due_at <= ? THEN 1 ELSE 0 END) AS due_cards
+            FROM cards c
+            JOIN words w ON w.id = c.word_id
+            WHERE w.archived_at IS NULL
+            """,
+            (timestamp,),
+        ).fetchone()
+        return ReviewStats(
+            total_cards=int(row["total_cards"] or 0),
+            reviewed_cards=int(row["reviewed_cards"] or 0),
+            due_cards=int(row["due_cards"] or 0),
+        )
 
 
 def _word_from_row(row: sqlite3.Row) -> Word:

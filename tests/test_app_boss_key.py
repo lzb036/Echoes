@@ -64,9 +64,22 @@ def test_footer_shows_key_hints_before_and_after_reveal(tmp_path) -> None:
 
     async def scenario() -> None:
         async with app.run_test() as pilot:
-            meta = app.query_one("#meta")
-            assert str(meta.render()) == "Space Answer  Esc Cover  q Quit"
+            keys = app.query_one("#keys")
+            assert str(keys.render()) == "Space Answer  Esc Cover  q Quit"
             await pilot.press("space")
-            assert str(meta.render()) == "1 Again  2 Hard  3 Good  4 Easy  Esc Cover  q Quit"
+            assert str(keys.render()) == "1 Again  2 Hard  3 Good  4 Easy  Esc Cover  q Quit"
+
+    asyncio.run(scenario())
+
+
+def test_study_screen_shows_batch_and_card_status(tmp_path) -> None:
+    app, _store = make_app(tmp_path)
+
+    async def scenario() -> None:
+        async with app.run_test():
+            status = app.query_one("#status")
+            rendered = str(status.render())
+            assert "Batch total=1 reviewed=0 new=1 due=1" in rendered
+            assert "Card reviews=0 lapses=0 due=now" in rendered
 
     asyncio.run(scenario())

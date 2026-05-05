@@ -48,6 +48,17 @@ class DueCard:
 
 
 @dataclass(frozen=True)
+class ReviewStats:
+    total_cards: int
+    reviewed_cards: int
+    due_cards: int
+
+    @property
+    def new_cards(self) -> int:
+        return max(0, self.total_cards - self.reviewed_cards)
+
+
+@dataclass(frozen=True)
 class ReviewRecord:
     id: int | None
     card_id: int

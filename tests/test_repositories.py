@@ -43,6 +43,12 @@ def test_store_creates_due_card_and_records_review(tmp_path) -> None:
     assert store.count_reviews() == 1
     assert store.count_due_cards(now=NOW) == 0
 
+    stats = store.review_stats(now=NOW)
+    assert stats.total_cards == 1
+    assert stats.reviewed_cards == 1
+    assert stats.due_cards == 0
+    assert stats.new_cards == 0
+
 
 def test_settings_are_seeded_and_updated(tmp_path) -> None:
     store = make_store(tmp_path)

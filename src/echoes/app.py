@@ -9,7 +9,7 @@ from textual.widgets import RichLog, Static
 
 from echoes.config import AppConfig
 from echoes.db.repositories import EchoesStore
-from echoes.models import DueCard, ReviewRating
+from echoes.models import DueCard, ReviewRating, ReviewStats
 from echoes.srs.service import SrsService
 from echoes.time_utils import utc_now
 from echoes.ui.fake_logs import FakeLogService
@@ -39,11 +39,16 @@ class EchoesApp(App[None]):
         text-style: bold;
     }
 
+    #status {
+        height: auto;
+        margin-bottom: 1;
+    }
+
     #answer {
         height: 1fr;
     }
 
-    #meta {
+    #keys {
         height: auto;
         color: white;
         dock: bottom;
@@ -72,6 +77,7 @@ class EchoesApp(App[None]):
         self.config = config
         self.fake_logs = FakeLogService(profile=config.fake_log_profile)
         self.current: DueCard | None = None
+        self.stats = ReviewStats(total_cards=0, reviewed_cards=0, due_cards=0)
         self.answer_revealed = False
         self.started_at: datetime | None = None
         self.cover_active = False
@@ -79,8 +85,9 @@ class EchoesApp(App[None]):
     def compose(self) -> ComposeResult:
         with Container(id="study"):
             yield Static("", id="term", markup=False)
+            yield Static("", id="status", markup=False)
             yield Static("", id="answer", markup=False)
-            yield Static("", id="meta", markup=False)
+            yield Static("", id="keys", markup=False)
         yield RichLog(
             max_lines=self.fake_logs.max_lines,
             wrap=False,
@@ -135,33 +142,37 @@ class EchoesApp(App[None]):
 
     def _load_next_card(self) -> None:
         self.current = self.store.next_due_card()
+        self.stats = self.store.review_stats()
         self.answer_revealed = False
         self.started_at = utc_now()
         self._render_study()
 
     def _render_study(self) -> None:
         term = self.query_one("#term", Static)
+        status = self.query_one("#status", Static)
         answer = self.query_one("#answer", Static)
-        meta = self.query_one("#meta", Static)
+        keys = self.query_one("#keys", Static)
 
         if self.current is None:
             term.update("No due items.")
+            status.update(_batch_status(self.stats))
             answer.update("")
-            meta.update(EMPTY_HELP)
+            keys.update(EMPTY_HELP)
             return
 
         word = self.current.word
         term.update(word.term)
+        status.update(_status_text(self.current, self.stats))
         if not self.answer_revealed:
             answer.update("")
-            meta.update(PROMPT_HELP)
+            keys.update(PROMPT_HELP)
             return
 
         details = [
             part for part in [word.definition, _phonetic(word.phonetic), word.example] if part
         ]
         answer.update("\n".join(details) if details else "(empty)")
-        meta.update(RATING_HELP)
+        keys.update(RATING_HELP)
 
     def _tick_cover(self) -> None:
         if not self.cover_active:
@@ -175,3 +186,34 @@ def _phonetic(value: str) -> str:
     if not stripped:
         return ""
     return f"/{stripped.strip('/')}/"
+
+
+def _status_text(current: DueCard, stats: ReviewStats) -> str:
+    card = current.card
+    return (
+        f"{_batch_status(stats)}\n"
+        f"Card reviews={card.review_count} lapses={card.lapse_count} due={_due_text(card.due_at)}"
+    )
+
+
+def _batch_status(stats: ReviewStats) -> str:
+    remaining = max(0, stats.due_cards)
+    return (
+        f"Batch total={stats.total_cards} reviewed={stats.reviewed_cards} "
+        f"new={stats.new_cards} due={remaining}"
+    )
+
+
+def _due_text(value: datetime) -> str:
+    delta = value - utc_now()
+    seconds = int(delta.total_seconds())
+    if seconds <= 0:
+        return "now"
+    minutes = seconds // 60
+    if minutes < 60:
+        return f"{minutes}m"
+    hours = minutes // 60
+    if hours < 48:
+        return f"{hours}h"
+    days = hours // 24
+    return f"{days}d"
