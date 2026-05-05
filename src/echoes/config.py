@@ -28,10 +28,6 @@ def default_data_dir() -> Path:
     if explicit_home:
         return Path(explicit_home)
 
-    local_app_data = os.environ.get("LOCALAPPDATA")
-    if local_app_data:
-        return Path(local_app_data) / "Echoes"
-
     return Path.cwd() / "data"
 
 

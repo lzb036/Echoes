@@ -139,15 +139,15 @@ Boss Key 是第一核心功能。默认按键建议为 `escape`，但必须可�
 
 整体进度：
 
-- `Batch 1/60` 表示本批 60 个词里已经完成 1 个。
-- `Word 1/3` 表示当前词已经过关 1 次。
+- 右上角第一行表示本批 60 个词里已经完成几个，例如 `1/60`。
+- 右上角第二行表示当前词已经过关几次，例如 `1/3`。
 
 ## 数据库设计
 
 数据库使用单个 SQLite 文件，建议默认路径：
 
-- 开发环境：项目目录下 `data/echoes.db`。
-- 用户环境：`%LOCALAPPDATA%\Echoes\echoes.db`。
+- 默认环境：项目目录下 `data/echoes.db`。
+- 手动测试：项目目录下 `data/test.db` 或命令行 `--db` 指定的路径。
 - 便携版：包内 `data\echoes.db`。
 
 ### words
@@ -269,7 +269,8 @@ Windows 注意事项：
 
 - 路径处理必须使用 `pathlib.Path`。
 - 不要硬编码 `/` 作为路径分隔符。
-- 默认数据目录优先读取 `%LOCALAPPDATA%`。
+- 默认数据目录使用项目根目录下的 `data\`。
+- 允许用 `ECHOES_HOME` 或 `ECHOES_DB_PATH` 显式覆盖数据库位置。
 - 控制台编码问题要尽量避免，核心界面默认 ASCII 或简单 UTF-8 文本。
 - 快捷键设计要考虑 `Ctrl+C`、`Ctrl+Z`、`Alt+Tab` 等 Windows 常见行为。
 - 不依赖 Unix-only 命令。

@@ -36,14 +36,21 @@ uv run echoes
 Local development defaults to:
 
 ```text
-%LOCALAPPDATA%\Echoes\echoes.db
+data\echoes.db
 ```
 
-Use a project-local database when testing manually:
+Use a separate project-local database when testing manually:
 
 ```powershell
 uv run echoes --db .\data\test.db import .\items.csv
 uv run echoes --db .\data\test.db
+```
+
+So the usual local files are:
+
+```text
+data\echoes.db  # normal local use
+data\test.db    # manual testing
 ```
 
 Review progress is intentionally simple:

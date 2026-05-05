@@ -67,15 +67,17 @@ def test_footer_shows_key_hints_before_and_after_reveal(tmp_path) -> None:
     asyncio.run(scenario())
 
 
-def test_study_screen_shows_batch_and_card_status(tmp_path) -> None:
+def test_study_screen_shows_compact_progress_without_labels(tmp_path) -> None:
     app, _store = make_app(tmp_path)
 
     async def scenario() -> None:
         async with app.run_test():
             status = app.query_one("#status")
             rendered = str(status.render())
-            assert "Batch [--------------------] 0/1" in rendered
-            assert "Word [---] 0/3" in rendered
+            assert "[------------] 0/1" in rendered
+            assert "[---] 0/3" in rendered
+            assert "Batch" not in rendered
+            assert "Word" not in rendered
 
     asyncio.run(scenario())
 
@@ -90,8 +92,8 @@ def test_good_rating_advances_word_progress_until_three_passes(tmp_path) -> None
             status = app.query_one("#status")
             rendered = str(status.render())
             assert "opaque" in str(app.query_one("#term").render())
-            assert "Batch [--------------------] 0/1" in rendered
-            assert "Word [#--] 1/3" in rendered
+            assert "[------------] 0/1" in rendered
+            assert "[#--] 1/3" in rendered
 
             await pilot.press("space")
             await pilot.press("3")
@@ -99,6 +101,7 @@ def test_good_rating_advances_word_progress_until_three_passes(tmp_path) -> None
             await pilot.press("3")
             rendered = str(status.render())
             assert "No items." in str(app.query_one("#term").render())
-            assert "Batch [####################] 1/1" in rendered
+            assert "[############] 1/1" in rendered
+            assert "[###] 3/3" in rendered
 
     asyncio.run(scenario())

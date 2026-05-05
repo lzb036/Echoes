@@ -4,7 +4,7 @@ from datetime import datetime
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Container
+from textual.containers import Container, Horizontal
 from textual.widgets import RichLog, Static
 
 from echoes.config import AppConfig
@@ -32,15 +32,21 @@ class EchoesApp(App[None]):
         padding: 1 2;
     }
 
-    #term {
+    #top {
         height: auto;
         margin-bottom: 1;
+    }
+
+    #term {
+        width: 1fr;
+        height: auto;
         text-style: bold;
     }
 
     #status {
+        width: 22;
         height: auto;
-        margin-bottom: 1;
+        text-align: right;
     }
 
     #answer {
@@ -82,8 +88,9 @@ class EchoesApp(App[None]):
 
     def compose(self) -> ComposeResult:
         with Container(id="study"):
-            yield Static("", id="term", markup=False)
-            yield Static("", id="status", markup=False)
+            with Horizontal(id="top"):
+                yield Static("", id="term", markup=False)
+                yield Static("", id="status", markup=False)
             yield Static("", id="answer", markup=False)
             yield Static("", id="keys", markup=False)
         yield RichLog(
@@ -159,7 +166,7 @@ class EchoesApp(App[None]):
 
         if self.current is None:
             term.update("No items.")
-            status.update(_batch_status(self.stats))
+            status.update(_status_text(None, self.stats))
             answer.update("")
             keys.update(EMPTY_HELP)
             return
@@ -192,19 +199,19 @@ def _phonetic(value: str) -> str:
     return f"/{stripped.strip('/')}/"
 
 
-def _status_text(current: StudyCard, stats: ReviewStats) -> str:
-    pass_count = min(PASS_TARGET, max(0, current.card.pass_count))
+def _status_text(current: StudyCard | None, stats: ReviewStats) -> str:
+    pass_count = _current_pass_count(current)
     return (
-        f"{_batch_status(stats)}\n"
-        f"Word {_progress_bar(pass_count, PASS_TARGET, width=3)} {pass_count}/{PASS_TARGET}"
+        f"{_progress_bar(stats.completed_cards, stats.total_cards, width=12)} "
+        f"{stats.completed_cards}/{stats.total_cards}\n"
+        f"{_progress_bar(pass_count, PASS_TARGET, width=3)} {pass_count}/{PASS_TARGET}"
     )
 
 
-def _batch_status(stats: ReviewStats) -> str:
-    return (
-        f"Batch {_progress_bar(stats.completed_cards, stats.total_cards, width=20)} "
-        f"{stats.completed_cards}/{stats.total_cards}"
-    )
+def _current_pass_count(current: StudyCard | None) -> int:
+    if current is not None:
+        return min(PASS_TARGET, max(0, current.card.pass_count))
+    return PASS_TARGET
 
 
 def _progress_bar(value: int, total: int, *, width: int) -> str:
