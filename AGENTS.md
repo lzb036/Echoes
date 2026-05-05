@@ -26,6 +26,7 @@
 - pytest：测试核心调度、数据库和导入导出逻辑。
 - ruff：代码格式和静态检查。
 - uv：推荐作为 Windows 下的依赖和虚拟环境管理工具。
+- PyInstaller：用于生成 Windows 便携版发布包。
 
 保留 Python + Textual 的理由：
 
@@ -330,6 +331,14 @@ Windows 注意事项：
 
 命令行输出也要低调，不使用明显学习软件 branding。
 
+便携版发布要求：
+
+- 发布包优先使用 PyInstaller onedir。
+- 便携版入口包含 `start.cmd`、`import.cmd` 和 `doctor.cmd`。
+- 便携版脚本必须设置 `ECHOES_HOME` 到包内 `data` 目录。
+- 普通用户文档优先描述下载 zip、放入 `items.csv`、双击脚本这条路径。
+- Python、uv、pytest、ruff 和打包说明放在开发文档中。
+
 ## 开发计划
 
 ### 阶段 0：项目骨架
@@ -423,12 +432,12 @@ Windows 注意事项：
 目标：
 
 - Windows 本地安装。
-- 可选生成独立 exe。
+- 生成 Windows 便携版 zip。
 - 完成基础 README。
 
 验收：
 
-- 新 Windows 环境能按文档运行。
+- 新 Windows 环境解压 zip 后能双击脚本运行。
 - 数据文件位置明确。
 - 卸载不误删用户数据。
 

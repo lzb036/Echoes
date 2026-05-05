@@ -8,3 +8,5 @@ data/*.db-*
 .env
 items.csv
 *.pdf
+build/
+dist/
