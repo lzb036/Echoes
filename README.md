@@ -28,9 +28,11 @@ uv run echoes import .\items.csv
 uv run echoes
 ```
 
+导入前先准备好 `items.csv`。它必须包含 60 个有效词条。
+
 ## 创建词库 CSV
 
-在项目目录下创建 `items.csv`：
+在项目目录下创建 `items.csv`。文件需要包含表头，并且正好有 60 个有效词条。
 
 ```powershell
 @'
@@ -38,6 +40,7 @@ term,definition,phonetic,example,tags
 opaque,hard to understand,oʊˈpeɪk,The rule is opaque.,work
 terse,brief,tɜːrs,Keep the output terse.,work
 subtle,delicate or not obvious,sʌtl,There is a subtle difference.,work
+# ...继续补足到 60 个有效词条
 '@ | Set-Content -Encoding UTF8 .\items.csv
 ```
 
@@ -109,19 +112,7 @@ CSV 格式要求：
 uv run echoes import .\items.csv
 ```
 
-默认会校验 CSV 中正好有 60 个有效词条。
-
-如果想保留每天的原始 CSV，可以让 Codex 把输出文件改成日期命名，例如：
-
-```text
-目标输出文件改为：imports/cheese-2026-05-04.csv
-```
-
-然后这样导入：
-
-```powershell
-uv run echoes import .\imports\cheese-2026-05-04.csv
-```
+导入前会校验 CSV 中正好有 60 个有效词条。
 
 ## 导入词库
 
@@ -129,27 +120,17 @@ uv run echoes import .\imports\cheese-2026-05-04.csv
 uv run echoes import .\items.csv
 ```
 
-默认导入方式是替换当前批次。也就是说，应用只保留本次 CSV 中的 60 个有效词条作为当前词库；不在本次 CSV 里的旧词会被软归档，不再出现在复习队列和统计数量里。历史复习记录不会被删除。
+导入成功后，数据库里原来的词条、卡片和复习记录都会被删除，只保留本次 CSV 中的 60 个有效词条。导入失败时，旧数据不会被改动。
 
 示例输出：
 
 ```text
-ok rows=60 items=60 updated=0 archived=0 cards=60 reset=0 skipped=0
+ok rows=60 items=60 cards=60 deleted=60/60/42 skipped=0
 ```
 
-导入会自动去重。CSV 里重复的 `term` 只保留第一次出现的记录，后面的重复项计入 `skipped`。
+`deleted=旧词条/旧卡片/旧复习记录`。第一次导入时通常是 `deleted=0/0/0`。
 
-如果当天 CSV 不是 60 个有效词条，导入会失败，避免误把不完整文件替换进当前词库。临时测试少量 CSV 时可以这样关闭数量校验：
-
-```powershell
-uv run echoes import .\items.csv --batch-size 0
-```
-
-如果确实想恢复旧的追加去重导入方式：
-
-```powershell
-uv run echoes import .\items.csv --mode merge
-```
+CSV 里空的 `term` 和重复 `term` 会被跳过，计入 `skipped`。如果有效词条不是 60 个，导入会失败。
 
 ## 启动应用
 
@@ -236,7 +217,7 @@ uv run echoes stats
 示例输出：
 
 ```text
-items=3 cards=3 due=3 reviews=0
+items=60 cards=60 due=60 reviews=0
 ```
 
 含义：
@@ -310,7 +291,6 @@ uv run echoes config get
 - `show_help`
 - `fake_log_profile`
 - `review_limit`
-- `daily_new_limit`：默认 `60`，当前仅作为每日批次数量说明；导入命令默认按 60 校验，可用 `--batch-size` 临时覆盖。
 
 ## 环境检查
 

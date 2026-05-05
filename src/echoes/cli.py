@@ -12,7 +12,7 @@ from echoes.config import build_config, default_db_path
 from echoes.db.connection import connect
 from echoes.db.migrations import migrate
 from echoes.db.repositories import EchoesStore
-from echoes.importers.csv_importer import ImportMode, import_csv
+from echoes.importers.csv_importer import import_csv
 from echoes.srs.service import SrsService
 
 DEFAULT_IMPORT_BATCH_SIZE = 60
@@ -28,15 +28,13 @@ def main(argv: list[str] | None = None) -> None:
         store.seed_default_settings()
 
         if args.command == "import":
-            mode = ImportMode(args.mode)
             try:
                 result = import_csv(
                     args.path,
                     store=store,
                     srs=SrsService(),
                     card_type=args.card_type,
-                    mode=mode,
-                    batch_size=_resolve_batch_size(args) if mode == ImportMode.REPLACE else None,
+                    batch_size=DEFAULT_IMPORT_BATCH_SIZE,
                 )
             except ValueError as exc:
                 print(f"error {exc}")
@@ -45,10 +43,8 @@ def main(argv: list[str] | None = None) -> None:
                 "ok "
                 f"rows={result.rows_seen} "
                 f"items={result.words_created} "
-                f"updated={result.words_updated} "
-                f"archived={result.words_archived} "
                 f"cards={result.cards_created} "
-                f"reset={result.cards_reset} "
+                f"deleted={result.words_deleted}/{result.cards_deleted}/{result.reviews_deleted} "
                 f"skipped={result.skipped}"
             )
             return
@@ -83,17 +79,6 @@ def _build_parser() -> argparse.ArgumentParser:
     import_parser = subparsers.add_parser("import")
     import_parser.add_argument("path", type=Path)
     import_parser.add_argument("--card-type", default="recognition")
-    import_parser.add_argument(
-        "--mode",
-        choices=[mode.value for mode in ImportMode],
-        default=ImportMode.REPLACE.value,
-    )
-    import_parser.add_argument(
-        "--batch-size",
-        type=int,
-        default=None,
-        help="Expected valid item count for replace imports. Use 0 to disable.",
-    )
 
     subparsers.add_parser("stats")
     subparsers.add_parser("doctor")
@@ -114,12 +99,6 @@ def _doctor(db_path: Path) -> None:
     print(f"python={sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
     print(f"textual={textual.__version__}")
     print(f"fsrs={fsrs_version}")
-
-
-def _resolve_batch_size(args: argparse.Namespace) -> int | None:
-    if args.batch_size is not None:
-        return args.batch_size if args.batch_size > 0 else None
-    return DEFAULT_IMPORT_BATCH_SIZE
 
 
 def _config_command(store: EchoesStore, args: argparse.Namespace) -> None:

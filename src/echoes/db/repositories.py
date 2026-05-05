@@ -24,13 +24,12 @@ class WordImportRow:
 
 
 @dataclass(frozen=True)
-class ReplaceBatchOutcome:
+class RebuildBatchOutcome:
     words_created: int
-    words_updated: int
-    words_reactivated: int
-    words_archived: int
     cards_created: int
-    cards_reset: int
+    reviews_deleted: int
+    cards_deleted: int
+    words_deleted: int
 
 
 class EchoesStore:
@@ -142,14 +141,14 @@ class EchoesStore:
             True,
         )
 
-    def replace_word_batch(
+    def rebuild_word_batch(
         self,
         *,
         words: Sequence[WordImportRow],
         card_type: str,
         card_states: Sequence[tuple[str, datetime]],
         now: datetime | None = None,
-    ) -> ReplaceBatchOutcome:
+    ) -> RebuildBatchOutcome:
         if len(words) != len(card_states):
             raise ValueError("word and card state counts differ")
         if not words:
@@ -157,110 +156,36 @@ class EchoesStore:
 
         timestamp = now or utc_now()
         timestamp_iso = to_iso(timestamp)
-        normalized_terms = [word.term.strip().lower() for word in words]
-        placeholders = ", ".join("?" for _ in normalized_terms)
-
-        words_created = 0
-        words_updated = 0
-        words_reactivated = 0
-        cards_created = 0
-        cards_reset = 0
-
         with self.conn:
-            archive_cursor = self.conn.execute(
-                f"""
-                UPDATE words
-                SET archived_at = ?, updated_at = ?
-                WHERE archived_at IS NULL
-                  AND lower(term) NOT IN ({placeholders})
-                """,
-                (timestamp_iso, timestamp_iso, *normalized_terms),
-            )
-            words_archived = archive_cursor.rowcount
+            reviews_deleted = self.conn.execute("DELETE FROM reviews").rowcount
+            cards_deleted = self.conn.execute("DELETE FROM cards").rowcount
+            words_deleted = self.conn.execute("DELETE FROM words").rowcount
 
             for word, (fsrs_state, due_at) in zip(words, card_states, strict=True):
-                existing = self.conn.execute(
+                word_id = self._insert_word(word, timestamp=timestamp)
+                self.conn.execute(
                     """
-                    SELECT id, archived_at
-                    FROM words
-                    WHERE lower(term) = lower(?)
-                    ORDER BY
-                        CASE WHEN archived_at IS NULL THEN 0 ELSE 1 END,
-                        id ASC
-                    LIMIT 1
-                    """,
-                    (word.term.strip(),),
-                ).fetchone()
-
-                if existing is None:
-                    word_id = self._insert_word(word, timestamp=timestamp)
-                    words_created += 1
-                    reset_existing_card = False
-                else:
-                    word_id = int(existing["id"])
-                    reset_existing_card = existing["archived_at"] is not None
-                    self._update_imported_word(word_id, word, timestamp=timestamp)
-                    words_updated += 1
-                    if reset_existing_card:
-                        words_reactivated += 1
-
-                existing_card = self.conn.execute(
-                    """
-                    SELECT id
-                    FROM cards
-                    WHERE word_id = ? AND card_type = ?
-                    LIMIT 1
-                    """,
-                    (word_id, card_type),
-                ).fetchone()
-
-                if existing_card is None:
-                    self.conn.execute(
-                        """
-                        INSERT INTO cards(
-                            word_id, card_type, fsrs_state, due_at, created_at, updated_at
-                        )
-                        VALUES (?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            word_id,
-                            card_type,
-                            fsrs_state,
-                            to_iso(due_at),
-                            timestamp_iso,
-                            timestamp_iso,
-                        ),
+                    INSERT INTO cards(
+                        word_id, card_type, fsrs_state, due_at, created_at, updated_at
                     )
-                    cards_created += 1
-                elif reset_existing_card:
-                    self.conn.execute(
-                        """
-                        UPDATE cards
-                        SET
-                            fsrs_state = ?,
-                            due_at = ?,
-                            last_reviewed_at = NULL,
-                            review_count = 0,
-                            lapse_count = 0,
-                            updated_at = ?
-                        WHERE id = ?
-                        """,
-                        (
-                            fsrs_state,
-                            to_iso(due_at),
-                            timestamp_iso,
-                            int(existing_card["id"]),
-                        ),
-                    )
-                    cards_reset += 1
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        word_id,
+                        card_type,
+                        fsrs_state,
+                        to_iso(due_at),
+                        timestamp_iso,
+                        timestamp_iso,
+                    ),
+                )
 
-        return ReplaceBatchOutcome(
-            words_created=words_created,
-            words_updated=words_updated,
-            words_reactivated=words_reactivated,
-            words_archived=words_archived,
-            cards_created=cards_created,
-            cards_reset=cards_reset,
+        return RebuildBatchOutcome(
+            words_created=len(words),
+            cards_created=len(words),
+            reviews_deleted=reviews_deleted,
+            cards_deleted=cards_deleted,
+            words_deleted=words_deleted,
         )
 
     def _insert_word(self, word: WordImportRow, *, timestamp: datetime) -> int:
@@ -285,42 +210,6 @@ class EchoesStore:
             ),
         )
         return int(cursor.lastrowid)
-
-    def _update_imported_word(
-        self,
-        word_id: int,
-        word: WordImportRow,
-        *,
-        timestamp: datetime,
-    ) -> None:
-        tags_json = json.dumps(word.tags or [], ensure_ascii=False)
-        self.conn.execute(
-            """
-            UPDATE words
-            SET
-                term = ?,
-                definition = ?,
-                phonetic = ?,
-                example = ?,
-                note = ?,
-                tags = ?,
-                source = ?,
-                archived_at = NULL,
-                updated_at = ?
-            WHERE id = ?
-            """,
-            (
-                word.term.strip(),
-                word.definition.strip(),
-                word.phonetic.strip(),
-                word.example.strip(),
-                word.note.strip(),
-                tags_json,
-                word.source.strip(),
-                to_iso(timestamp),
-                word_id,
-            ),
-        )
 
     def get_word(self, word_id: int) -> Word | None:
         row = self.conn.execute("SELECT * FROM words WHERE id = ?", (word_id,)).fetchone()

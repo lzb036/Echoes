@@ -10,7 +10,6 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "show_help": "false",
     "show_chinese": "true",
     "fake_log_profile": "docker",
-    "daily_new_limit": "60",
     "review_limit": "100",
 }
 
