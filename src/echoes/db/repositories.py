@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from echoes.config import DEFAULT_SETTINGS
-from echoes.models import CardRecord, DueCard, ReviewStats, Word
+from echoes.models import PASS_TARGET, CardRecord, DueCard, ReviewRating, ReviewStats, Word
 from echoes.srs.service import ReviewOutcome as SrsReviewOutcome
 from echoes.time_utils import from_iso, to_iso, utc_now
 
@@ -166,9 +166,10 @@ class EchoesStore:
                 self.conn.execute(
                     """
                     INSERT INTO cards(
-                        word_id, card_type, fsrs_state, due_at, created_at, updated_at
+                        word_id, card_type, fsrs_state, due_at,
+                        pass_count, completed_at, created_at, updated_at
                     )
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, 0, NULL, ?, ?)
                     """,
                     (
                         word_id,
@@ -236,9 +237,10 @@ class EchoesStore:
             cursor = self.conn.execute(
                 """
                 INSERT INTO cards(
-                    word_id, card_type, fsrs_state, due_at, created_at, updated_at
+                    word_id, card_type, fsrs_state, due_at,
+                    pass_count, completed_at, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, 0, NULL, ?, ?)
                 """,
                 (
                     word_id,
@@ -292,6 +294,8 @@ class EchoesStore:
                 c.last_reviewed_at AS c_last_reviewed_at,
                 c.review_count AS c_review_count,
                 c.lapse_count AS c_lapse_count,
+                c.pass_count AS c_pass_count,
+                c.completed_at AS c_completed_at,
                 c.created_at AS c_created_at,
                 c.updated_at AS c_updated_at,
                 w.id AS w_id,
@@ -307,8 +311,11 @@ class EchoesStore:
                 w.archived_at AS w_archived_at
             FROM cards c
             JOIN words w ON w.id = c.word_id
-            WHERE c.due_at <= ? AND w.archived_at IS NULL
-            ORDER BY c.due_at ASC, c.id ASC
+            WHERE c.completed_at IS NULL AND w.archived_at IS NULL
+            ORDER BY
+                CASE WHEN c.due_at <= ? THEN 0 ELSE 1 END,
+                c.due_at ASC,
+                c.id ASC
             LIMIT 1
             """,
             (timestamp,),
@@ -325,6 +332,7 @@ class EchoesStore:
         is_manual: bool = False,
     ) -> None:
         with self.conn:
+            pass_count, completed_at = self._next_pass_state(card_id, outcome.rating)
             self.conn.execute(
                 """
                 UPDATE cards
@@ -334,6 +342,8 @@ class EchoesStore:
                     last_reviewed_at = ?,
                     review_count = review_count + 1,
                     lapse_count = lapse_count + ?,
+                    pass_count = ?,
+                    completed_at = ?,
                     updated_at = ?
                 WHERE id = ?
                 """,
@@ -342,6 +352,8 @@ class EchoesStore:
                     to_iso(outcome.due_at),
                     to_iso(outcome.reviewed_at),
                     outcome.lapse_delta,
+                    pass_count,
+                    to_iso(completed_at) if completed_at else None,
                     to_iso(utc_now()),
                     card_id,
                 ),
@@ -365,6 +377,30 @@ class EchoesStore:
                     1 if is_manual else 0,
                 ),
             )
+
+    def _next_pass_state(
+        self,
+        card_id: int,
+        rating: ReviewRating,
+    ) -> tuple[int, datetime | None]:
+        row = self.conn.execute(
+            "SELECT pass_count, completed_at FROM cards WHERE id = ?",
+            (card_id,),
+        ).fetchone()
+        if row is None:
+            raise RuntimeError("card not found")
+        if row["completed_at"]:
+            return int(row["pass_count"]), from_iso(row["completed_at"])
+
+        current = int(row["pass_count"])
+        if rating == ReviewRating.AGAIN:
+            next_count = 0
+        elif rating in {ReviewRating.GOOD, ReviewRating.EASY}:
+            next_count = min(PASS_TARGET, current + 1)
+        else:
+            next_count = current
+        completed_at = utc_now() if next_count >= PASS_TARGET else None
+        return next_count, completed_at
 
     def count_words(self) -> int:
         return int(
@@ -402,23 +438,19 @@ class EchoesStore:
         return int(self.conn.execute("SELECT COUNT(*) AS count FROM reviews").fetchone()["count"])
 
     def review_stats(self, *, now: datetime | None = None) -> ReviewStats:
-        timestamp = to_iso(now or utc_now())
         row = self.conn.execute(
             """
             SELECT
                 COUNT(*) AS total_cards,
-                SUM(CASE WHEN c.review_count > 0 THEN 1 ELSE 0 END) AS reviewed_cards,
-                SUM(CASE WHEN c.due_at <= ? THEN 1 ELSE 0 END) AS due_cards
+                SUM(CASE WHEN c.completed_at IS NOT NULL THEN 1 ELSE 0 END) AS completed_cards
             FROM cards c
             JOIN words w ON w.id = c.word_id
             WHERE w.archived_at IS NULL
             """,
-            (timestamp,),
         ).fetchone()
         return ReviewStats(
             total_cards=int(row["total_cards"] or 0),
-            reviewed_cards=int(row["reviewed_cards"] or 0),
-            due_cards=int(row["due_cards"] or 0),
+            completed_cards=int(row["completed_cards"] or 0),
         )
 
 
@@ -450,6 +482,8 @@ def _card_from_row(row: sqlite3.Row) -> CardRecord:
         lapse_count=int(row["lapse_count"]),
         created_at=from_iso(row["created_at"]),
         updated_at=from_iso(row["updated_at"]),
+        pass_count=int(row["pass_count"]),
+        completed_at=from_iso(row["completed_at"]) if row["completed_at"] else None,
     )
 
 
@@ -481,4 +515,6 @@ def _card_from_prefixed_row(row: sqlite3.Row) -> CardRecord:
         lapse_count=int(row["c_lapse_count"]),
         created_at=from_iso(row["c_created_at"]),
         updated_at=from_iso(row["c_updated_at"]),
+        pass_count=int(row["c_pass_count"]),
+        completed_at=from_iso(row["c_completed_at"]) if row["c_completed_at"] else None,
     )

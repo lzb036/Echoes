@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import IntEnum
 
+PASS_TARGET = 3
+
 
 class ReviewRating(IntEnum):
     AGAIN = 1
@@ -39,6 +41,8 @@ class CardRecord:
     lapse_count: int
     created_at: datetime
     updated_at: datetime
+    pass_count: int = 0
+    completed_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -50,12 +54,11 @@ class DueCard:
 @dataclass(frozen=True)
 class ReviewStats:
     total_cards: int
-    reviewed_cards: int
-    due_cards: int
+    completed_cards: int
 
     @property
-    def new_cards(self) -> int:
-        return max(0, self.total_cards - self.reviewed_cards)
+    def remaining_cards(self) -> int:
+        return max(0, self.total_cards - self.completed_cards)
 
 
 @dataclass(frozen=True)

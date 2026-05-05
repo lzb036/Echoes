@@ -79,7 +79,22 @@ def test_study_screen_shows_batch_and_card_status(tmp_path) -> None:
         async with app.run_test():
             status = app.query_one("#status")
             rendered = str(status.render())
-            assert "Batch total=1 reviewed=0 new=1 due=1" in rendered
-            assert "Card reviews=0 lapses=0 due=now" in rendered
+            assert "Batch [--------------------] 0/1" in rendered
+            assert "Word [---] 0/3" in rendered
+
+    asyncio.run(scenario())
+
+
+def test_good_rating_advances_word_pass_progress(tmp_path) -> None:
+    app, _store = make_app(tmp_path)
+
+    async def scenario() -> None:
+        async with app.run_test() as pilot:
+            await pilot.press("space")
+            await pilot.press("3")
+            status = app.query_one("#status")
+            rendered = str(status.render())
+            assert "Batch [--------------------] 0/1" in rendered
+            assert "Word [#--] 1/3" in rendered
 
     asyncio.run(scenario())

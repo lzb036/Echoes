@@ -9,7 +9,7 @@ from textual.widgets import RichLog, Static
 
 from echoes.config import AppConfig
 from echoes.db.repositories import EchoesStore
-from echoes.models import DueCard, ReviewRating, ReviewStats
+from echoes.models import PASS_TARGET, DueCard, ReviewRating, ReviewStats
 from echoes.srs.service import SrsService
 from echoes.time_utils import utc_now
 from echoes.ui.fake_logs import FakeLogService
@@ -77,7 +77,7 @@ class EchoesApp(App[None]):
         self.config = config
         self.fake_logs = FakeLogService(profile=config.fake_log_profile)
         self.current: DueCard | None = None
-        self.stats = ReviewStats(total_cards=0, reviewed_cards=0, due_cards=0)
+        self.stats = ReviewStats(total_cards=0, completed_cards=0)
         self.answer_revealed = False
         self.started_at: datetime | None = None
         self.cover_active = False
@@ -189,31 +189,17 @@ def _phonetic(value: str) -> str:
 
 
 def _status_text(current: DueCard, stats: ReviewStats) -> str:
-    card = current.card
-    return (
-        f"{_batch_status(stats)}\n"
-        f"Card reviews={card.review_count} lapses={card.lapse_count} due={_due_text(card.due_at)}"
-    )
+    word_bar = _progress_bar(current.card.pass_count, PASS_TARGET, width=3)
+    return f"{_batch_status(stats)}\nWord {word_bar} {current.card.pass_count}/{PASS_TARGET}"
 
 
 def _batch_status(stats: ReviewStats) -> str:
-    remaining = max(0, stats.due_cards)
     return (
-        f"Batch total={stats.total_cards} reviewed={stats.reviewed_cards} "
-        f"new={stats.new_cards} due={remaining}"
+        f"Batch {_progress_bar(stats.completed_cards, stats.total_cards, width=20)} "
+        f"{stats.completed_cards}/{stats.total_cards}"
     )
 
 
-def _due_text(value: datetime) -> str:
-    delta = value - utc_now()
-    seconds = int(delta.total_seconds())
-    if seconds <= 0:
-        return "now"
-    minutes = seconds // 60
-    if minutes < 60:
-        return f"{minutes}m"
-    hours = minutes // 60
-    if hours < 48:
-        return f"{hours}h"
-    days = hours // 24
-    return f"{days}d"
+def _progress_bar(value: int, total: int, *, width: int) -> str:
+    filled = 0 if total <= 0 else min(width, max(0, round((value / total) * width)))
+    return f"[{'#' * filled}{'-' * (width - filled)}]"

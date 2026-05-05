@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS cards (
     last_reviewed_at TEXT,
     review_count INTEGER NOT NULL DEFAULT 0,
     lapse_count INTEGER NOT NULL DEFAULT 0,
+    pass_count INTEGER NOT NULL DEFAULT 0,
+    completed_at TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     FOREIGN KEY (word_id) REFERENCES words(id) ON DELETE CASCADE
