@@ -49,6 +49,27 @@ subtle,delicate or not obvious,,There is a subtle difference.,,daily,items.csv
 
 CSV 里空的 `term` 和重复 `term` 会被跳过。如果有效词条不是 60 个，导入会失败。
 
+## 从 PDF 生成 items.csv
+
+如果当天的单词来自 PDF，可以先把 PDF 发给 AI 工具，让它按下面提示生成 CSV 内容：
+
+```text
+请从这个 PDF 中提取适合今天背诵的 60 个英文单词或短语，并生成 items.csv 内容。
+
+要求：
+1. 只输出 CSV，不要解释。
+2. 第一行必须是：term,definition,phonetic,example,note,tags,source
+3. 必须正好有 60 个有效词条。
+4. term 不能为空，不能重复。
+5. definition 用简明中文或英文释义。
+6. example 如果 PDF 中有原句就使用原句，没有就留空。
+7. phonetic、note 可以留空。
+8. tags 统一写 daily。
+9. source 写 PDF 文件名。
+```
+
+拿到结果后，把内容保存为 `items.csv`，放到 `Echoes` 文件夹里，再运行 `import.cmd`。
+
 ## 导入规则
 
 每次导入都会完全覆盖旧数据。
