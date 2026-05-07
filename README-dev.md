@@ -104,7 +104,7 @@ The output is:
 
 ```text
 dist\Echoes-Windows\Echoes\
-dist\Echoes-Windows-v0.1.0.zip
+dist\Echoes-Windows-v0.1.1.zip
 ```
 
 The portable package includes:

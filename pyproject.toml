@@ -1,6 +1,6 @@
 [project]
 name = "echoes"
-version = "0.1.0"
+version = "0.1.1"
 description = "A low-profile terminal word review app for Windows."
 readme = "README.md"
 requires-python = ">=3.12"
