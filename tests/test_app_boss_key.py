@@ -76,7 +76,7 @@ def test_study_screen_shows_compact_progress_without_labels(tmp_path) -> None:
             status = app.query_one("#status")
             rendered = str(status.render())
             assert "[------------] 0/1" in rendered
-            assert "[-----] 0/5" in rendered
+            assert "[---] 0/3" in rendered
             assert "Batch" not in rendered
             assert "Word" not in rendered
 
@@ -94,7 +94,7 @@ def test_easy_rating_advances_word_progress_until_mastered(tmp_path) -> None:
             rendered = str(status.render())
             assert "opaque" in str(app.query_one("#term").render())
             assert "[------------] 0/1" in rendered
-            assert "[#----] 1/5" in rendered
+            assert "[#--] 1/3" in rendered
 
             for _ in range(PASS_TARGET - 1):
                 await pilot.press("space")
@@ -102,6 +102,6 @@ def test_easy_rating_advances_word_progress_until_mastered(tmp_path) -> None:
             rendered = str(status.render())
             assert "No items." in str(app.query_one("#term").render())
             assert "[############] 1/1" in rendered
-            assert "[#####] 5/5" in rendered
+            assert "[###] 3/3" in rendered
 
     asyncio.run(scenario())

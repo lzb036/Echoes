@@ -52,9 +52,9 @@ def test_store_tracks_leitner_progress_and_records_reviews(tmp_path) -> None:
     assert updated is not None
     assert updated.pass_count == PASS_TARGET
     assert updated.completed_at == NOW
-    assert updated.next_review_turn == 8
-    assert store.review_turn() == 8
-    assert store.count_reviews() == 8
+    assert updated.next_review_turn == 6
+    assert store.review_turn() == 6
+    assert store.count_reviews() == 6
     assert store.count_remaining_cards() == 0
     assert store.next_study_card() is None
 

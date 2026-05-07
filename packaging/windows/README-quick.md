@@ -6,7 +6,7 @@
 
 `items.csv` must contain exactly 60 valid items. A successful import deletes the old items, cards, and review records, then keeps only the new 60 items.
 
-Each item moves through 5 boxes. `Easy` moves it up one box, `Hard` moves it down one box, and `Again` resets it to 0. At `5/5`, the item stops appearing. Missed items return after a very short gap; easier items wait longer as they move up.
+Each item needs 3 passes. `Easy` adds one pass, `Hard` subtracts one pass, and `Again` resets it to 0. At `3/3`, the item stops appearing. Missed items return after a very short gap; easier items wait longer as progress rises.
 
 Useful files:
 

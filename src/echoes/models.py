@@ -4,10 +4,10 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import IntEnum
 
-PASS_TARGET = 5
+PASS_TARGET = 3
 AGAIN_DELAY = 1
 HARD_DELAY = 2
-EASY_DELAYS = (4, 8, 14, 22)
+EASY_DELAYS = (4, 8)
 
 
 class ReviewRating(IntEnum):
