@@ -1,4 +1,4 @@
-term,definition,phonetic,example,note,tags,source
-opaque,hard to understand,,The rule is opaque.,,sample,template
-terse,brief,,Keep the output terse.,,sample,template
-subtle,delicate or not obvious,,There is a subtle difference.,,sample,template
+term,definition,phonetic,example,example_zh,note,tags,source
+opaque,hard to understand,ˈoʊpeɪk,The rule is opaque.,这个规则很难理解。,,sample,template
+terse,brief,tɜːrs,Keep the answer terse.,让答案保持简洁。,,sample,template
+subtle,delicate or not obvious,ˈsʌtl,There is a subtle difference.,这里有一个细微差别。,,sample,template

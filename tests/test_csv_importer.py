@@ -99,3 +99,21 @@ def test_csv_import_skips_blank_and_duplicate_terms(tmp_path) -> None:
     assert result.words_created == 2
     assert store.count_words() == 2
     assert store.find_word_by_term("opaque").definition == "hard to understand"
+
+
+def test_csv_import_maps_example_zh_to_note(tmp_path) -> None:
+    csv_path = tmp_path / "items.csv"
+    csv_path.write_text(
+        "term,definition,phonetic,example,example_zh\n"
+        "opaque,hard to understand,ˈoʊpeɪk,The rule is opaque.,这个规则很难理解。\n",
+        encoding="utf-8",
+    )
+    store = make_store(tmp_path)
+
+    import_csv(csv_path, store=store, batch_size=1)
+
+    word = store.find_word_by_term("opaque")
+    assert word is not None
+    assert word.phonetic == "ˈoʊpeɪk"
+    assert word.example == "The rule is opaque."
+    assert word.note == "这个规则很难理解。"

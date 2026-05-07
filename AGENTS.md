@@ -47,7 +47,7 @@
 - 默认黑底白字，或完全沿用用户终端主题。
 - 不使用彩色大标题、卡片、进度环、动画装饰和醒目的学习文案。
 - 终端标题不要出现 “word”, “vocabulary”, “study”, “flashcard” 等明显词汇。
-- 主界面只显示当前必要信息：单词、释义/例句、评分键、极少量状态。
+- 主界面只显示当前必要信息：单词和音标、释义/例句、评分键、极少量状态。
 - 可配置隐藏所有中文解释，只显示英文释义、例句或短提示。
 - 支持一键暂停、恢复、退出，但默认快捷键不应和常见终端操作冲突太多。
 
@@ -110,7 +110,8 @@ Boss Key 是第一核心功能。默认按键建议为 `escape`，但必须可�
 
 默认按键建议：
 
-- `space`: 显示答案。
+- `e`: 分步显示例句，第一次显示英文例句，再按一次显示中文翻译；显示答案前后都可使用。
+- `space`: 显示释义，并进入评分状态；若例句已展开，释义显示在例句上方。
 - `1`: Again。
 - `2`: Hard。
 - `3`: Easy。
@@ -166,8 +167,8 @@ Boss Key 是第一核心功能。默认按键建议为 `escape`，但必须可�
 - `term` TEXT NOT NULL。
 - `definition` TEXT。
 - `phonetic` TEXT。
-- `example` TEXT。
-- `note` TEXT。
+- `example` TEXT，英文例句。
+- `note` TEXT，英文例句的中文翻译或其他备注。
 - `tags` TEXT，JSON 数组字符串。
 - `source` TEXT。
 - `created_at` TEXT NOT NULL。
@@ -412,7 +413,7 @@ Windows 注意事项：
 
 验收：
 
-- 能导入常见 CSV：`term,definition,example,tags`。
+- 能导入常见 CSV：`term,definition,phonetic,example,example_zh,tags`。
 - 导入成功会完全覆盖旧数据，只保留本次 CSV 的 60 个有效词条。
 - Boss Key 可配置。
 

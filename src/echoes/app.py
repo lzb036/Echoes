@@ -9,14 +9,15 @@ from textual.widgets import RichLog, Static
 
 from echoes.config import AppConfig
 from echoes.db.repositories import EchoesStore
-from echoes.models import PASS_TARGET, ReviewRating, ReviewStats, StudyCard
+from echoes.models import PASS_TARGET, ReviewRating, ReviewStats, StudyCard, Word
 from echoes.time_utils import utc_now
 from echoes.ui.fake_logs import FakeLogService
 from echoes.ui.keymap import normalize_key
 
 EMPTY_HELP = "Esc Cover  q Quit"
-PROMPT_HELP = "Space Answer  Esc Cover  q Quit"
+PROMPT_HELP = "e Ex  Space Answer  Esc Cover  q Quit"
 RATING_HELP = "1 Again  2 Hard  3 Easy  Esc Cover  q Quit"
+ANSWER_HELP = "e Ex  1 Again  2 Hard  3 Easy  Esc Cover  q Quit"
 
 
 class EchoesApp(App[None]):
@@ -72,6 +73,7 @@ class EchoesApp(App[None]):
         Binding("2", "rate_hard", show=False),
         Binding("3", "rate_easy", show=False),
         Binding("4", "rate_easy", show=False),
+        Binding("e", "example", show=False),
         Binding("q", "quit", show=False),
     ]
 
@@ -83,6 +85,7 @@ class EchoesApp(App[None]):
         self.current: StudyCard | None = None
         self.stats = ReviewStats(total_cards=0, completed_cards=0)
         self.answer_revealed = False
+        self.example_stage = 0
         self.started_at: datetime | None = None
         self.cover_active = False
 
@@ -133,6 +136,16 @@ class EchoesApp(App[None]):
     def action_rate_easy(self) -> None:
         self._rate(ReviewRating.EASY)
 
+    def action_example(self) -> None:
+        if self.cover_active or self.current is None:
+            return
+        word = self.current.word
+        if self.example_stage == 0 and word.example.strip():
+            self.example_stage = 1
+        elif self.example_stage < 2 and word.note.strip():
+            self.example_stage = 2
+        self._render_study()
+
     def _rate(self, rating: ReviewRating) -> None:
         if self.cover_active or self.current is None or not self.answer_revealed:
             return
@@ -152,6 +165,7 @@ class EchoesApp(App[None]):
         self.current = self.store.next_study_card()
         self.stats = self.store.review_stats()
         self.answer_revealed = False
+        self.example_stage = 0
         self.started_at = now
         self._render_study()
 
@@ -169,18 +183,15 @@ class EchoesApp(App[None]):
             return
 
         word = self.current.word
-        term.update(word.term)
+        term.update(_term_text(word))
         status.update(_status_text(self.current, self.stats))
         if not self.answer_revealed:
-            answer.update("")
+            answer.update(_prompt_text(word, example_stage=self.example_stage))
             keys.update(PROMPT_HELP)
             return
 
-        details = [
-            part for part in [word.definition, _phonetic(word.phonetic), word.example] if part
-        ]
-        answer.update("\n".join(details) if details else "(empty)")
-        keys.update(RATING_HELP)
+        answer.update(_answer_text(word, example_stage=self.example_stage))
+        keys.update(ANSWER_HELP)
 
     def _tick_cover(self) -> None:
         if not self.cover_active:
@@ -194,6 +205,35 @@ def _phonetic(value: str) -> str:
     if not stripped:
         return ""
     return f"/{stripped.strip('/')}/"
+
+
+def _term_text(word: Word) -> str:
+    phonetic = _phonetic(word.phonetic)
+    if not phonetic:
+        return word.term
+    return f"{word.term}  {phonetic}"
+
+
+def _answer_text(word: Word, *, example_stage: int) -> str:
+    details = [word.definition] if word.definition else []
+    example_lines = _example_lines(word, example_stage=example_stage)
+    if details and example_lines:
+        details.append("")
+    details.extend(example_lines)
+    return "\n".join(details) if details else "(empty)"
+
+
+def _prompt_text(word: Word, *, example_stage: int) -> str:
+    return "\n".join(_example_lines(word, example_stage=example_stage))
+
+
+def _example_lines(word: Word, *, example_stage: int) -> list[str]:
+    details: list[str] = []
+    if example_stage >= 1 and word.example.strip():
+        details.append(word.example)
+    if example_stage >= 2 and word.note.strip():
+        details.append(word.note)
+    return details
 
 
 def _status_text(current: StudyCard | None, stats: ReviewStats) -> str:

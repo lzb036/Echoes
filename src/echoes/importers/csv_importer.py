@@ -69,7 +69,7 @@ def _read_import_rows(path: Path) -> tuple[int, list[WordImportRow], int]:
                     definition=row.get("definition") or "",
                     phonetic=row.get("phonetic") or "",
                     example=row.get("example") or "",
-                    note=row.get("note") or "",
+                    note=row.get("example_zh") or row.get("note") or "",
                     tags=_parse_tags(row.get("tags") or ""),
                     source=row.get("source") or path.name,
                 )

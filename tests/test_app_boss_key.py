@@ -26,6 +26,28 @@ def make_app(tmp_path) -> tuple[EchoesApp, EchoesStore]:
     return EchoesApp(store=store, config=config), store
 
 
+def make_app_with_examples(tmp_path) -> tuple[EchoesApp, EchoesStore]:
+    conn = connect(tmp_path / "examples.db")
+    migrate(conn)
+    store = EchoesStore(conn)
+    store.seed_default_settings()
+    word = store.create_word(
+        term="opaque",
+        definition="hard to understand",
+        phonetic="oʊˈpeɪk",
+        example="The rule is opaque.",
+        note="这个规则很难理解。",
+        now=NOW,
+    )
+    store.create_card(
+        word_id=int(word.id),
+        card_type="recognition",
+        now=NOW,
+    )
+    config = build_config(db_path=tmp_path / "examples.db", settings=store.get_settings())
+    return EchoesApp(store=store, config=config), store
+
+
 def test_boss_key_preserves_current_card_and_writes_no_review(tmp_path) -> None:
     app, store = make_app(tmp_path)
 
@@ -61,9 +83,73 @@ def test_footer_shows_key_hints_before_and_after_reveal(tmp_path) -> None:
     async def scenario() -> None:
         async with app.run_test() as pilot:
             keys = app.query_one("#keys")
-            assert str(keys.render()) == "Space Answer  Esc Cover  q Quit"
+            assert str(keys.render()) == "e Ex  Space Answer  Esc Cover  q Quit"
             await pilot.press("space")
-            assert str(keys.render()) == "1 Again  2 Hard  3 Easy  Esc Cover  q Quit"
+            assert str(keys.render()) == "e Ex  1 Again  2 Hard  3 Easy  Esc Cover  q Quit"
+
+    asyncio.run(scenario())
+
+
+def test_example_key_reveals_english_then_chinese_example(tmp_path) -> None:
+    app, _store = make_app_with_examples(tmp_path)
+
+    async def scenario() -> None:
+        async with app.run_test() as pilot:
+            answer = app.query_one("#answer")
+            keys = app.query_one("#keys")
+            assert str(answer.render()) == ""
+            assert str(keys.render()) == "e Ex  Space Answer  Esc Cover  q Quit"
+
+            await pilot.press("e")
+            rendered = str(answer.render())
+            assert "The rule is opaque." in rendered
+            assert "这个规则很难理解。" not in rendered
+
+            await pilot.press("e")
+            rendered = str(answer.render())
+            assert "The rule is opaque." in rendered
+            assert "这个规则很难理解。" in rendered
+
+            await pilot.press("space")
+            rendered = str(answer.render())
+            assert "opaque  /oʊˈpeɪk/" in str(app.query_one("#term").render())
+            assert "/oʊˈpeɪk/" not in rendered
+            assert "hard to understand" in rendered
+            assert "hard to understand\n\nThe rule is opaque." in rendered
+            assert rendered.index("hard to understand") < rendered.index("The rule is opaque.")
+            assert rendered.index("The rule is opaque.") < rendered.index("这个规则很难理解。")
+            assert str(keys.render()) == "e Ex  1 Again  2 Hard  3 Easy  Esc Cover  q Quit"
+
+            await pilot.press("e")
+            rendered = str(answer.render())
+            assert "hard to understand" in rendered
+            assert "The rule is opaque." in rendered
+            assert "这个规则很难理解。" in rendered
+
+    asyncio.run(scenario())
+
+
+def test_example_key_can_reveal_after_answer(tmp_path) -> None:
+    app, _store = make_app_with_examples(tmp_path)
+
+    async def scenario() -> None:
+        async with app.run_test() as pilot:
+            await pilot.press("space")
+            answer = app.query_one("#answer")
+            rendered = str(answer.render())
+            assert "hard to understand" in rendered
+            assert "The rule is opaque." not in rendered
+            assert "这个规则很难理解。" not in rendered
+
+            await pilot.press("e")
+            rendered = str(answer.render())
+            assert rendered.index("hard to understand") < rendered.index("The rule is opaque.")
+            assert "hard to understand\n\nThe rule is opaque." in rendered
+            assert "这个规则很难理解。" not in rendered
+
+            await pilot.press("e")
+            rendered = str(answer.render())
+            assert rendered.index("The rule is opaque.") < rendered.index("这个规则很难理解。")
 
     asyncio.run(scenario())
 

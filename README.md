@@ -20,7 +20,7 @@ Echoes 是一个运行在 Windows 终端里的低存在感背单词工具。
 支持的表头：
 
 ```csv
-term,definition,phonetic,example,note,tags,source
+term,definition,phonetic,example,example_zh,note,tags,source
 ```
 
 必填字段：
@@ -31,7 +31,8 @@ term,definition,phonetic,example,note,tags,source
 
 - `definition`：释义或答案。
 - `phonetic`：音标。
-- `example`：例句。
+- `example`：英文例句。
+- `example_zh`：英文例句的中文翻译。
 - `note`：备注。
 - `tags`：标签。
 - `source`：来源。
@@ -39,10 +40,10 @@ term,definition,phonetic,example,note,tags,source
 示例：
 
 ```csv
-term,definition,phonetic,example,note,tags,source
-opaque,hard to understand,,The rule is opaque.,,daily,items.csv
-terse,brief,,Keep the output terse.,,daily,items.csv
-subtle,delicate or not obvious,,There is a subtle difference.,,daily,items.csv
+term,definition,phonetic,example,example_zh,note,tags,source
+opaque,hard to understand,ˈoʊpeɪk,The rule is opaque.,这个规则很难理解。,,daily,items.csv
+terse,brief,tɜːrs,Keep the answer terse.,让答案保持简洁。,,daily,items.csv
+subtle,delicate or not obvious,ˈsʌtl,There is a subtle difference.,这里有一个细微差别。,,daily,items.csv
 ```
 
 继续补足到 60 个有效词条后，再运行 `import.cmd`。
@@ -58,14 +59,17 @@ CSV 里空的 `term` 和重复 `term` 会被跳过。如果有效词条不是 60
 
 要求：
 1. 只输出 CSV，不要解释。
-2. 第一行必须是：term,definition,phonetic,example,note,tags,source
+2. 第一行必须是：term,definition,phonetic,example,example_zh,note,tags,source
 3. 必须正好有 60 个有效词条。
 4. term 不能为空，不能重复。
-5. definition 用简明中文或英文释义。
-6. example 如果 PDF 中有原句就使用原句，没有就留空。
-7. phonetic、note 可以留空。
-8. tags 统一写 daily。
-9. source 写 PDF 文件名。
+5. definition 使用 PDF 中的简明中文释义；如果过长，可以压缩到最核心含义。
+6. phonetic 使用 PDF 中的音标，不要添加外层斜杠。
+7. example 为每个单词生成一个简短英文例句，难度参考往届考研英语二阅读/翻译句子，但要更短、更清楚，适合背单词时快速理解。
+8. example 必须自然包含 term；句子尽量 8 到 16 个英文词，不要写复杂长难句，不要使用生僻人名地名。
+9. example_zh 是 example 的自然中文翻译，简洁准确。
+10. note 留空。
+11. tags 统一写 daily。
+12. source 写 PDF 文件名。
 ```
 
 拿到结果后，把内容保存为 `items.csv`，放到 `Echoes` 文件夹里，再运行 `import.cmd`。
@@ -100,6 +104,8 @@ CSV 里空的 `term` 和重复 `term` 会被跳过。如果有效词条不是 60
 - `Hard`：再做 2 张卡后回来。
 - `Easy`：随进度升高，间隔约为 4、8 张卡。
 
+单词会和音标显示在同一行，例如 `single  /ˈsɪŋɡl/`。
+
 右上角第一行表示整批 60 个词的完成数，例如 `1/60`；第二行表示当前词的进度，例如 `1/3`。
 
 ## 文件说明
@@ -116,7 +122,8 @@ CSV 里空的 `term` 和重复 `term` 会被跳过。如果有效词条不是 60
 
 ## 按键
 
-- `Space`：显示答案。
+- `e`：查看例句；第一次显示英文例句，再按一次显示中文翻译。显示答案前后都可使用。
+- `Space`：显示释义，并进入评分状态；如果已经展开例句，释义会显示在例句上方。
 - `1`：Again。
 - `2`：Hard。
 - `3`：Easy。

@@ -17,7 +17,8 @@ Useful files:
 
 Keys:
 
-- `Space`: reveal answer.
+- `e`: show examples before or after the answer; first English, then Chinese.
+- `Space`: reveal definition above any visible examples.
 - `1` / `2` / `3`: rate Again / Hard / Easy.
 - `Esc`: switch to or from the cover log.
 - `q`: quit.
