@@ -4,18 +4,17 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import IntEnum
 
-PASS_TARGET = 3
-AGAIN_DELAY = 2
-HARD_DELAY = 4
-GOOD_DELAY = 10
-EASY_DELAY = 16
+PASS_TARGET = 5
+AGAIN_DELAY = 1
+HARD_DELAY = 2
+EASY_DELAYS = (4, 8, 14, 22)
 
 
 class ReviewRating(IntEnum):
     AGAIN = 1
     HARD = 2
-    GOOD = 3
-    EASY = 4
+    EASY = 3
+    LEGACY_EASY = 4
 
 
 @dataclass(frozen=True)

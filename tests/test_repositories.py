@@ -16,7 +16,7 @@ def make_store(tmp_path) -> EchoesStore:
     return store
 
 
-def test_store_tracks_three_pass_progress_and_records_reviews(tmp_path) -> None:
+def test_store_tracks_leitner_progress_and_records_reviews(tmp_path) -> None:
     store = make_store(tmp_path)
     word = store.create_word(term="opaque", definition="hard to understand", now=NOW)
     card = store.create_card(word_id=int(word.id), card_type="recognition", now=NOW)
@@ -26,24 +26,24 @@ def test_store_tracks_three_pass_progress_and_records_reviews(tmp_path) -> None:
     assert study_card.word.term == "opaque"
     assert study_card.card.pass_count == 0
 
-    store.apply_review(int(card.id), ReviewRating.GOOD, reviewed_at=NOW, elapsed_ms=900)
+    store.apply_review(int(card.id), ReviewRating.EASY, reviewed_at=NOW, elapsed_ms=900)
     updated = store.get_card(int(card.id))
     assert updated is not None
     assert updated.pass_count == 1
-    assert updated.next_review_turn == 11
+    assert updated.next_review_turn == 5
     assert updated.completed_at is None
 
     store.apply_review(int(card.id), ReviewRating.HARD, reviewed_at=NOW, elapsed_ms=900)
     updated = store.get_card(int(card.id))
     assert updated is not None
-    assert updated.pass_count == 1
-    assert updated.next_review_turn == 6
+    assert updated.pass_count == 0
+    assert updated.next_review_turn == 4
 
     store.apply_review(int(card.id), ReviewRating.AGAIN, reviewed_at=NOW, elapsed_ms=900)
     updated = store.get_card(int(card.id))
     assert updated is not None
     assert updated.pass_count == 0
-    assert updated.next_review_turn == 5
+    assert updated.next_review_turn == 4
 
     for _ in range(PASS_TARGET):
         store.apply_review(int(card.id), ReviewRating.EASY, reviewed_at=NOW, elapsed_ms=900)
@@ -52,9 +52,9 @@ def test_store_tracks_three_pass_progress_and_records_reviews(tmp_path) -> None:
     assert updated is not None
     assert updated.pass_count == PASS_TARGET
     assert updated.completed_at == NOW
-    assert updated.next_review_turn == 6
-    assert store.review_turn() == 6
-    assert store.count_reviews() == 6
+    assert updated.next_review_turn == 8
+    assert store.review_turn() == 8
+    assert store.count_reviews() == 8
     assert store.count_remaining_cards() == 0
     assert store.next_study_card() is None
 
@@ -138,7 +138,7 @@ def test_migration_rebuilds_legacy_fsrs_tables(tmp_path) -> None:
     store = EchoesStore(conn)
     word = store.create_word(term="fresh", definition="new", now=NOW)
     card = store.create_card(word_id=int(word.id), card_type="recognition", now=NOW)
-    store.apply_review(int(card.id), ReviewRating.GOOD, reviewed_at=NOW, elapsed_ms=100)
+    store.apply_review(int(card.id), ReviewRating.EASY, reviewed_at=NOW, elapsed_ms=100)
 
     assert store.get_card(int(card.id)).pass_count == 1
 
@@ -222,21 +222,41 @@ def test_next_study_card_prefers_lower_pass_count(tmp_path) -> None:
     first_card = store.create_card(word_id=int(first_word.id), card_type="recognition", now=NOW)
     store.create_card(word_id=int(second_word.id), card_type="recognition", now=NOW)
 
-    store.apply_review(int(first_card.id), ReviewRating.GOOD, reviewed_at=NOW, elapsed_ms=100)
+    store.apply_review(int(first_card.id), ReviewRating.EASY, reviewed_at=NOW, elapsed_ms=100)
 
     next_card = store.next_study_card()
     assert next_card is not None
     assert next_card.word.term == "second"
 
 
-def test_review_queue_uses_rating_delays(tmp_path) -> None:
+def test_due_lapses_return_before_unseen_cards(tmp_path) -> None:
+    store = make_store(tmp_path)
+    words = [store.create_word(term=f"item{index}", now=NOW) for index in range(1, 7)]
+    cards = [
+        store.create_card(word_id=int(word.id), card_type="recognition", now=NOW) for word in words
+    ]
+
+    store.apply_review(int(cards[0].id), ReviewRating.EASY, reviewed_at=NOW, elapsed_ms=100)
+    assert store.next_study_card().word.term == "item2"
+
+    store.apply_review(int(cards[1].id), ReviewRating.AGAIN, reviewed_at=NOW, elapsed_ms=100)
+    assert store.next_study_card().word.term == "item3"
+
+    store.apply_review(int(cards[2].id), ReviewRating.EASY, reviewed_at=NOW, elapsed_ms=100)
+
+    next_card = store.next_study_card()
+    assert next_card is not None
+    assert next_card.word.term == "item2"
+
+
+def test_hard_demotes_and_returns_before_higher_box_items(tmp_path) -> None:
     store = make_store(tmp_path)
     words = [store.create_word(term=f"item{index}", now=NOW) for index in range(1, 5)]
     cards = [
         store.create_card(word_id=int(word.id), card_type="recognition", now=NOW) for word in words
     ]
 
-    store.apply_review(int(cards[0].id), ReviewRating.GOOD, reviewed_at=NOW, elapsed_ms=100)
+    store.apply_review(int(cards[0].id), ReviewRating.EASY, reviewed_at=NOW, elapsed_ms=100)
 
     next_card = store.next_study_card()
     assert next_card is not None
@@ -246,9 +266,17 @@ def test_review_queue_uses_rating_delays(tmp_path) -> None:
     store.apply_review(int(cards[2].id), ReviewRating.HARD, reviewed_at=NOW, elapsed_ms=100)
 
     assert store.review_turn() == 3
-    assert store.get_card(int(cards[0].id)).next_review_turn == 11
-    assert store.get_card(int(cards[1].id)).next_review_turn == 4
-    assert store.get_card(int(cards[2].id)).next_review_turn == 7
+    assert store.get_card(int(cards[0].id)).next_review_turn == 5
+    assert store.get_card(int(cards[1].id)).pass_count == 0
+    assert store.get_card(int(cards[1].id)).next_review_turn == 3
+    assert store.get_card(int(cards[2].id)).pass_count == 0
+    assert store.get_card(int(cards[2].id)).next_review_turn == 5
+
+    next_card = store.next_study_card()
+    assert next_card is not None
+    assert next_card.word.term == "item2"
+
+    store.apply_review(int(cards[1].id), ReviewRating.EASY, reviewed_at=NOW, elapsed_ms=100)
 
     next_card = store.next_study_card()
     assert next_card is not None
@@ -258,4 +286,4 @@ def test_review_queue_uses_rating_delays(tmp_path) -> None:
 
     next_card = store.next_study_card()
     assert next_card is not None
-    assert next_card.word.term == "item2"
+    assert next_card.word.term == "item3"

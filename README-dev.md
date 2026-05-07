@@ -55,18 +55,17 @@ data\test.db    # manual testing
 
 Review progress is intentionally simple:
 
-- each imported item starts at `0/3`;
-- `Good` and `Easy` add one pass;
-- `Hard` keeps the current pass count;
-- `Again` resets the item to `0/3`;
-- an item leaves the queue at `3/3`.
+- each imported item starts at `0/5`;
+- `Easy` moves the item up one box;
+- `Hard` demotes the item by one box, down to `0/5`;
+- `Again` resets the item to `0/5`;
+- an item leaves the queue at `5/5`.
 
-The study queue uses delayed re-entry instead of strict 60-item rounds:
+The study queue uses a lightweight Leitner-style delayed re-entry instead of strict 60-item rounds. Due reviewed items are selected before unseen items:
 
-- `Again`: returns after 2 reviewed cards;
-- `Hard`: returns after 4 reviewed cards;
-- `Good`: returns after 10 reviewed cards;
-- `Easy`: returns after 16 reviewed cards.
+- `Again`: returns after 1 reviewed card;
+- `Hard`: returns after 2 reviewed cards;
+- `Easy`: returns after 4, 8, 14, then 22 reviewed cards as the box rises.
 
 ## Commands
 

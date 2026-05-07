@@ -9,8 +9,7 @@ from datetime import datetime
 from echoes.config import DEFAULT_SETTINGS
 from echoes.models import (
     AGAIN_DELAY,
-    EASY_DELAY,
-    GOOD_DELAY,
+    EASY_DELAYS,
     HARD_DELAY,
     PASS_TARGET,
     CardRecord,
@@ -291,8 +290,16 @@ class EchoesStore:
             JOIN words w ON w.id = c.word_id
             WHERE c.completed_at IS NULL AND w.archived_at IS NULL
             ORDER BY
-                CASE WHEN c.next_review_turn <= ? THEN 0 ELSE 1 END ASC,
-                CASE WHEN c.next_review_turn <= ? THEN c.pass_count ELSE c.next_review_turn END ASC,
+                CASE
+                    WHEN c.next_review_turn > 0 AND c.next_review_turn <= ? THEN 0
+                    WHEN c.next_review_turn = 0 THEN 1
+                    ELSE 2
+                END ASC,
+                CASE
+                    WHEN c.next_review_turn > 0 AND c.next_review_turn <= ? THEN c.next_review_turn
+                    WHEN c.next_review_turn = 0 THEN c.id
+                    ELSE c.next_review_turn
+                END ASC,
                 c.next_review_turn ASC,
                 c.pass_count ASC,
                 c.id ASC
@@ -329,7 +336,7 @@ class EchoesStore:
             next_review_turn = review_turn
             review_log_next_turn: int | None = None
             if completed_at is None:
-                next_review_turn = review_turn + _review_delay(rating)
+                next_review_turn = review_turn + _review_delay(rating, after)
                 review_log_next_turn = next_review_turn
             self.conn.execute(
                 """
@@ -440,19 +447,26 @@ class EchoesStore:
 def _next_pass_count(current: int, rating: ReviewRating) -> int:
     if rating == ReviewRating.AGAIN:
         return 0
-    if rating in (ReviewRating.GOOD, ReviewRating.EASY):
+    if rating == ReviewRating.HARD:
+        return max(0, current - 1)
+    if rating in (ReviewRating.EASY, ReviewRating.LEGACY_EASY):
         return min(PASS_TARGET, current + 1)
     return min(PASS_TARGET, current)
 
 
-def _review_delay(rating: ReviewRating) -> int:
+def _review_delay(rating: ReviewRating, pass_count_after: int) -> int:
     if rating == ReviewRating.AGAIN:
         return AGAIN_DELAY
     if rating == ReviewRating.HARD:
         return HARD_DELAY
-    if rating == ReviewRating.EASY:
-        return EASY_DELAY
-    return GOOD_DELAY
+    if rating in (ReviewRating.EASY, ReviewRating.LEGACY_EASY):
+        return _leveled_delay(EASY_DELAYS, pass_count_after)
+    return EASY_DELAYS[0]
+
+
+def _leveled_delay(delays: tuple[int, ...], pass_count_after: int) -> int:
+    index = min(max(pass_count_after - 1, 0), len(delays) - 1)
+    return delays[index]
 
 
 def _word_from_row(row: sqlite3.Row) -> Word:

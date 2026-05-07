@@ -37,7 +37,7 @@ def test_csv_import_rebuilds_the_database_batch(tmp_path) -> None:
     import_csv(first_csv, store=store, batch_size=2)
     card = store.next_study_card()
     assert card is not None
-    store.apply_review(int(card.card.id), ReviewRating.GOOD, reviewed_at=NOW, elapsed_ms=500)
+    store.apply_review(int(card.card.id), ReviewRating.EASY, reviewed_at=NOW, elapsed_ms=500)
     assert store.count_reviews() == 1
 
     result = import_csv(second_csv, store=store, batch_size=2)

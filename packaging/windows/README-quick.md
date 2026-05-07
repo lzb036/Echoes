@@ -6,7 +6,7 @@
 
 `items.csv` must contain exactly 60 valid items. A successful import deletes the old items, cards, and review records, then keeps only the new 60 items.
 
-Each item needs 3 passes. `Good` and `Easy` add one pass, `Hard` keeps the current pass count, and `Again` resets it to 0. At `3/3`, the item stops appearing. Missed items return sooner; easier items wait longer before returning.
+Each item moves through 5 boxes. `Easy` moves it up one box, `Hard` moves it down one box, and `Again` resets it to 0. At `5/5`, the item stops appearing. Missed items return after a very short gap; easier items wait longer as they move up.
 
 Useful files:
 
@@ -18,6 +18,6 @@ Useful files:
 Keys:
 
 - `Space`: reveal answer.
-- `1` / `2` / `3` / `4`: rate Again / Hard / Good / Easy.
+- `1` / `2` / `3`: rate Again / Hard / Easy.
 - `Esc`: switch to or from the cover log.
 - `q`: quit.

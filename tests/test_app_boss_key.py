@@ -6,6 +6,7 @@ from echoes.config import build_config
 from echoes.db.connection import connect
 from echoes.db.migrations import migrate
 from echoes.db.repositories import EchoesStore
+from echoes.models import PASS_TARGET
 
 NOW = datetime(2026, 1, 1, 9, 0, tzinfo=UTC)
 
@@ -62,7 +63,7 @@ def test_footer_shows_key_hints_before_and_after_reveal(tmp_path) -> None:
             keys = app.query_one("#keys")
             assert str(keys.render()) == "Space Answer  Esc Cover  q Quit"
             await pilot.press("space")
-            assert str(keys.render()) == "1 Again  2 Hard  3 Good  4 Easy  Esc Cover  q Quit"
+            assert str(keys.render()) == "1 Again  2 Hard  3 Easy  Esc Cover  q Quit"
 
     asyncio.run(scenario())
 
@@ -75,14 +76,14 @@ def test_study_screen_shows_compact_progress_without_labels(tmp_path) -> None:
             status = app.query_one("#status")
             rendered = str(status.render())
             assert "[------------] 0/1" in rendered
-            assert "[---] 0/3" in rendered
+            assert "[-----] 0/5" in rendered
             assert "Batch" not in rendered
             assert "Word" not in rendered
 
     asyncio.run(scenario())
 
 
-def test_good_rating_advances_word_progress_until_three_passes(tmp_path) -> None:
+def test_easy_rating_advances_word_progress_until_mastered(tmp_path) -> None:
     app, _store = make_app(tmp_path)
 
     async def scenario() -> None:
@@ -93,15 +94,14 @@ def test_good_rating_advances_word_progress_until_three_passes(tmp_path) -> None
             rendered = str(status.render())
             assert "opaque" in str(app.query_one("#term").render())
             assert "[------------] 0/1" in rendered
-            assert "[#--] 1/3" in rendered
+            assert "[#----] 1/5" in rendered
 
-            await pilot.press("space")
-            await pilot.press("3")
-            await pilot.press("space")
-            await pilot.press("3")
+            for _ in range(PASS_TARGET - 1):
+                await pilot.press("space")
+                await pilot.press("3")
             rendered = str(status.render())
             assert "No items." in str(app.query_one("#term").render())
             assert "[############] 1/1" in rendered
-            assert "[###] 3/3" in rendered
+            assert "[#####] 5/5" in rendered
 
     asyncio.run(scenario())

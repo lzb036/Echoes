@@ -16,7 +16,7 @@ from echoes.ui.keymap import normalize_key
 
 EMPTY_HELP = "Esc Cover  q Quit"
 PROMPT_HELP = "Space Answer  Esc Cover  q Quit"
-RATING_HELP = "1 Again  2 Hard  3 Good  4 Easy  Esc Cover  q Quit"
+RATING_HELP = "1 Again  2 Hard  3 Easy  Esc Cover  q Quit"
 
 
 class EchoesApp(App[None]):
@@ -70,7 +70,7 @@ class EchoesApp(App[None]):
         Binding("space", "reveal", show=False),
         Binding("1", "rate_again", show=False),
         Binding("2", "rate_hard", show=False),
-        Binding("3", "rate_good", show=False),
+        Binding("3", "rate_easy", show=False),
         Binding("4", "rate_easy", show=False),
         Binding("q", "quit", show=False),
     ]
@@ -129,9 +129,6 @@ class EchoesApp(App[None]):
 
     def action_rate_hard(self) -> None:
         self._rate(ReviewRating.HARD)
-
-    def action_rate_good(self) -> None:
-        self._rate(ReviewRating.GOOD)
 
     def action_rate_easy(self) -> None:
         self._rate(ReviewRating.EASY)
@@ -204,7 +201,7 @@ def _status_text(current: StudyCard | None, stats: ReviewStats) -> str:
     return (
         f"{_progress_bar(stats.completed_cards, stats.total_cards, width=12)} "
         f"{stats.completed_cards}/{stats.total_cards}\n"
-        f"{_progress_bar(pass_count, PASS_TARGET, width=3)} {pass_count}/{PASS_TARGET}"
+        f"{_progress_bar(pass_count, PASS_TARGET, width=PASS_TARGET)} {pass_count}/{PASS_TARGET}"
     )
 
 
